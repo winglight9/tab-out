@@ -587,6 +587,9 @@ function stripTitleNoise(title) {
   // 1. Strip leading notification count: "(2) Title" or "(99+) Title"
   title = title.replace(/^\(\d+\+?\)\s*/, '');
 
+  // 1b. Strip inline counts like "Inbox (16,359)" or "Messages (42)"
+  title = title.replace(/\s*\([\d,]+\+?\)\s*/g, ' ');
+
   // 2. Strip email addresses anywhere in the title (privacy + cleaner display)
   //    Catches patterns like "Subject - user@example.com - Gmail"
   //    First remove "- email@domain.com" segments (with separator)
