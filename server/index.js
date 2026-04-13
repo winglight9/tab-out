@@ -1,32 +1,27 @@
 // server/index.js
 // ─────────────────────────────────────────────────────────────────────────────
 // Main entry point for the Tab Out server.
-//
-// This file:
-//   1. Creates the web server (Express)
-//   2. Serves the dashboard HTML/CSS/JS files
-//   3. Hooks up all the API routes (defined in routes.js)
-//   4. Starts listening on the configured port
+// Serves the dashboard and API routes on localhost.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const express = require('express');
 const path    = require('path');
 const config  = require('./config');
 
-// The update checker polls GitHub every 6 hours for new commits.
-// We import it here so we can start it after the server is ready.
-const { startUpdateChecker } = require('./updater');
-
 const app = express();
 
-// Allow requests from the Chrome extension.
-// The extension's background script runs on the "chrome-extension://..." origin,
-// which is different from "http://localhost:3456". Without these headers, Chrome
-// blocks those cross-origin requests (CORS error).
+// CORS: only allow requests from the Chrome extension iframe (localhost)
+// and the extension's own origin. Block all other origins.
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  const origin = req.headers.origin || '';
+  const allowed = !origin
+    || origin.startsWith('http://localhost')
+    || origin.startsWith('chrome-extension://');
+  if (allowed) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+  }
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -44,9 +39,4 @@ app.use('/api', apiRouter);
 // Start the server
 app.listen(config.port, () => {
   console.log(`Tab Out running at http://localhost:${config.port}`);
-
-  // Kick off the update checker AFTER the server is listening.
-  // This way, even if the first GitHub check takes a few seconds,
-  // the server is already ready to handle requests.
-  startUpdateChecker();
 });
