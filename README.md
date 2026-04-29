@@ -2,7 +2,7 @@
 
 一个面向中文用户定制的 Chrome 新标签页扩展：暗色背景、快捷网址、标签页分组、稍后查看、无锡天气和本地时间。
 
-当前版本：`v0.01`
+当前版本：`V0.02`
 
 本项目基于 [zarazhangrui/tab-out](https://github.com/zarazhangrui/tab-out) 修改，原作者为 [Zara Zhang](https://x.com/zarazhangrui)，许可证为 MIT License。原作者信息和修改说明见 [`MODIFICATIONS.zh-CN.md`](./MODIFICATIONS.zh-CN.md)。
 
@@ -31,8 +31,8 @@ tab-out/extension/
 
 ### 方式二：下载打包版本
 
-1. 打开发布页：<https://github.com/winglight9/tab-out/releases/tag/v0.01>
-2. 下载 `tab-out-v0.01.zip`。
+1. 打开发布页：<https://github.com/winglight9/tab-out/releases/tag/V0.02>
+2. 下载 `tab-out-V0.02.zip`。
 3. 解压 zip 文件。
 4. 打开 Chrome，进入 `chrome://extensions`。
 5. 打开右上角“开发者模式”。
