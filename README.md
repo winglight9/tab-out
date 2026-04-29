@@ -1,93 +1,92 @@
-# Tab Out
+# Tab Out 中文定制版
 
-> 中文定制版说明见 [`MODIFICATIONS.zh-CN.md`](./MODIFICATIONS.zh-CN.md)。本仓库保留原项目作者、链接和 MIT License。
+一个面向中文用户定制的 Chrome 新标签页扩展：暗色背景、快捷网址、标签页分组、稍后查看、无锡天气和本地时间。
 
-**Keep tabs on your tabs.**
+本项目基于 [zarazhangrui/tab-out](https://github.com/zarazhangrui/tab-out) 修改，原作者为 [Zara Zhang](https://x.com/zarazhangrui)，许可证为 MIT License。原作者信息和修改说明见 [`MODIFICATIONS.zh-CN.md`](./MODIFICATIONS.zh-CN.md)。
 
-Tab Out is a Chrome extension that replaces your new tab page with a dashboard of everything you have open. Tabs are grouped by domain, with homepages (Gmail, X, LinkedIn, etc.) pulled into their own group. Close tabs with a satisfying swoosh + confetti.
+## 安装
 
-No server. No account. No external API calls. Just a Chrome extension.
+### 方式一：下载打包版本
 
----
+1. 打开发布页：<https://github.com/winglight9/tab-out/releases/tag/chinese-custom-v1>
+2. 下载 `tab-out-chinese-custom.zip`。
+3. 解压 zip 文件。
+4. 打开 Chrome，进入 `chrome://extensions`。
+5. 打开右上角“开发者模式”。
+6. 点击“加载已解压的扩展程序”。
+7. 选择解压后的 `extension/` 文件夹。
+8. 打开新标签页即可使用。
 
-## Install with a coding agent
-
-Send your coding agent (Claude Code, Codex, etc.) this repo and say **"install this"**:
-
-```
-https://github.com/zarazhangrui/tab-out
-```
-
-The agent will walk you through it. Takes about 1 minute.
-
----
-
-## Features
-
-- **See all your tabs at a glance** on a clean grid, grouped by domain
-- **Homepages group** pulls Gmail inbox, X home, YouTube, LinkedIn, GitHub homepages into one card
-- **Close tabs with style** with swoosh sound + confetti burst
-- **Duplicate detection** flags when you have the same page open twice, with one-click cleanup
-- **Click any tab to jump to it** across windows, no new tab opened
-- **Save for later** bookmark tabs to a checklist before closing them
-- **Localhost grouping** shows port numbers next to each tab so you can tell your vibe coding projects apart
-- **Expandable groups** show the first 8 tabs with a clickable "+N more"
-- **100% local** your data never leaves your machine
-- **Pure Chrome extension** no server, no Node.js, no npm, no setup beyond loading the extension
-
----
-
-## Manual Setup
-
-**1. Clone the repo**
+### 方式二：从源码安装
 
 ```bash
-git clone https://github.com/zarazhangrui/tab-out.git
+git clone https://github.com/winglight9/tab-out.git
 ```
 
-**2. Load the Chrome extension**
+然后在 Chrome 中加载仓库里的 `extension/` 文件夹：
 
-1. Open Chrome and go to `chrome://extensions`
-2. Enable **Developer mode** (top-right toggle)
-3. Click **Load unpacked**
-4. Navigate to the `extension/` folder inside the cloned repo and select it
+1. 打开 `chrome://extensions`。
+2. 打开“开发者模式”。
+3. 点击“加载已解压的扩展程序”。
+4. 选择 `tab-out/extension/`。
 
-**3. Open a new tab**
+## 功能
 
-You'll see Tab Out.
+- 简体中文界面。
+- 接近 Chrome 原生新标签页的暗色背景。
+- 顶部快捷网址，支持添加、删除和自动获取网站图标。
+- 默认快捷网址：Bilibili、V2EX、YouTube、微博、闲鱼。
+- 按网站域名分组展示当前打开的标签页。
+- `127.0.0.1` 和 `localhost` 会显示为“本地网页”。
+- 支持关闭单个标签页、关闭整组标签页、关闭重复标签页。
+- 支持把标签保存到“稍后查看”。
+- 右下角显示当前时间和无锡天气。
+- 点击工具栏 Tab Out 图标可打开设置弹窗，临时暂停 Tab Out 页面。
 
----
+## 使用说明
 
-## How it works
+打开新标签页后：
 
-```
-You open a new tab
-  -> Tab Out shows your open tabs grouped by domain
-  -> Homepages (Gmail, X, etc.) get their own group at the top
-  -> Click any tab title to jump to it
-  -> Close groups you're done with (swoosh + confetti)
-  -> Save tabs for later before closing them
-```
+1. 顶部区域显示快捷网址。
+2. 点击浅色加号可以添加新网址。
+3. 鼠标移到快捷网址上可以删除。
+4. 中间区域按网站分组显示当前打开的标签页。
+5. 点击标签标题可以跳转到对应标签页。
+6. 点击标签右侧按钮可以关闭或保存到稍后查看。
+7. 右侧“稍后查看”区域会显示已保存的标签。
 
-Everything runs inside the Chrome extension. No external server, no API calls, no data sent anywhere. Saved tabs are stored in `chrome.storage.local`.
+## 关于暂停开关
 
----
+Chrome 不提供扩展在启用状态下临时撤销 `chrome_url_overrides.newtab` 的 API。
 
-## Tech stack
+因此工具栏弹窗中的暂停开关不会真正恢复 Chrome 原生新标签页，而是显示一个临时暂停页面，并提供打开 `chrome://newtab` 的入口。
 
-| What | How |
-|------|-----|
-| Extension | Chrome Manifest V3 |
-| Storage | chrome.storage.local |
-| Sound | Web Audio API (synthesized, no files) |
-| Animations | CSS transitions + JS confetti particles |
+## 数据与隐私
 
----
+- 快捷网址保存在 `chrome.storage.local`。
+- 稍后查看列表保存在 `chrome.storage.local`。
+- 标签页信息只在本地读取和渲染。
+- 天气数据来自 [Open-Meteo Forecast API](https://open-meteo.com/)。
+- 网站图标使用 Chrome Manifest V3 `_favicon` 机制。
 
-## License
+## 技术栈
 
-MIT
+| 内容 | 实现 |
+|------|------|
+| 扩展 | Chrome Manifest V3 |
+| 新标签页接管 | `chrome_url_overrides.newtab` |
+| 标签页读取 | `chrome.tabs` |
+| 本地存储 | `chrome.storage.local` |
+| 网站图标 | Chrome `_favicon` API |
+| 天气 | Open-Meteo Forecast API |
+| 动画 | CSS transitions + JS confetti particles |
 
----
+## 来源与许可证
 
-Built by [Zara](https://x.com/zarazhangrui)
+本项目是 [zarazhangrui/tab-out](https://github.com/zarazhangrui/tab-out) 的中文定制版本。
+
+原项目作者：[Zara Zhang](https://x.com/zarazhangrui)
+
+许可证：MIT License
+
+原作者版权声明保留在 [`LICENSE`](./LICENSE) 中。
