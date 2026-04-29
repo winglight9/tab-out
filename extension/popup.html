@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tab Out 设置</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="popup">
+    <div class="popup-title">Tab Out</div>
+    <label class="switch-row">
+      <span>
+        <strong>启用新标签页</strong>
+        <small>关闭后，新标签页会显示临时替代页。</small>
+      </span>
+      <input type="checkbox" id="enabledToggle" checked>
+    </label>
+    <button type="button" id="openChromeNewtab">打开 Chrome 原生新标签页</button>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

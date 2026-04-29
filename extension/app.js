@@ -25,6 +25,15 @@
 
 // All open tabs — populated by fetchOpenTabs()
 let openTabs = [];
+let footerClockTimer = null;
+
+const DEFAULT_QUICK_LINKS = [
+  { title: 'Bilibili', url: 'https://www.bilibili.com' },
+  { title: 'V2EX', url: 'https://www.v2ex.com' },
+  { title: 'YouTube', url: 'https://www.youtube.com' },
+  { title: '微博', url: 'https://weibo.com' },
+  { title: '闲鱼', url: 'https://www.goofish.com' },
+];
 
 /**
  * fetchOpenTabs()
@@ -254,6 +263,138 @@ async function getSavedTabs() {
   };
 }
 
+function normalizeQuickLinkUrl(url) {
+  let trimmed = (url || '')
+    .trim()
+    .replace(/：/g, ':')
+    .replace(/／/g, '/');
+  if (!trimmed) return '';
+
+  if (/^localhost(:\d+)?(\/.*)?$/i.test(trimmed)) {
+    return `http://${trimmed}`;
+  }
+
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+async function getQuickLinks() {
+  const { quickLinks = [], defaultQuickLinksSeeded = false } = await chrome.storage.local.get([
+    'quickLinks',
+    'defaultQuickLinksSeeded',
+  ]);
+  let links = Array.isArray(quickLinks) ? quickLinks : [];
+
+  if (!defaultQuickLinksSeeded) {
+    const existingUrls = new Set(links.map(link => link.url));
+    const defaultsToAdd = DEFAULT_QUICK_LINKS
+      .filter(link => !existingUrls.has(link.url))
+      .map((link, index) => ({
+        id: `default-${Date.now()}-${index}`,
+        ...link,
+      }));
+    links = [...links, ...defaultsToAdd];
+    await chrome.storage.local.set({ quickLinks: links, defaultQuickLinksSeeded: true });
+  }
+
+  return links;
+}
+
+async function addQuickLink({ title, url }) {
+  const normalizedUrl = normalizeQuickLinkUrl(url);
+  if (!normalizedUrl) throw new Error('empty-url');
+
+  let parsed;
+  try {
+    parsed = new URL(normalizedUrl);
+  } catch {
+    throw new Error('invalid-url');
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('invalid-url');
+  }
+
+  const quickLinks = await getQuickLinks();
+  const existingIndex = quickLinks.findIndex(link => link.url === normalizedUrl);
+  const nextLink = {
+    id: Date.now().toString(),
+    title: (title || '').trim() || parsed.hostname.replace(/^www\./, ''),
+    url: normalizedUrl,
+  };
+
+  if (existingIndex !== -1) {
+    quickLinks[existingIndex] = { ...quickLinks[existingIndex], ...nextLink, id: quickLinks[existingIndex].id };
+    await chrome.storage.local.set({ quickLinks });
+    return { link: quickLinks[existingIndex], updated: true };
+  }
+
+  const savedLink = {
+    ...nextLink,
+  };
+  quickLinks.push(savedLink);
+  await chrome.storage.local.set({ quickLinks });
+  return { link: savedLink, updated: false };
+}
+
+function getChromeFaviconUrl(pageUrl, size = 32) {
+  return `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(pageUrl)}&size=${size}`;
+}
+
+async function deleteQuickLink(id) {
+  const quickLinks = await getQuickLinks();
+  await chrome.storage.local.set({ quickLinks: quickLinks.filter(link => link.id !== id) });
+}
+
+function formatFooterTime() {
+  return new Date().toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+function startFooterClock() {
+  const timeEl = document.getElementById('footerTime');
+  if (!timeEl) return;
+
+  function update() {
+    timeEl.textContent = formatFooterTime();
+  }
+
+  update();
+  if (footerClockTimer) clearInterval(footerClockTimer);
+  footerClockTimer = setInterval(update, 30000);
+}
+
+async function loadWuxiWeather() {
+  const weatherEl = document.getElementById('footerWeather');
+  if (!weatherEl) return;
+
+  try {
+    const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=31.4912&longitude=120.3119&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=Asia%2FShanghai&forecast_days=1');
+    if (!res.ok) throw new Error('weather-request-failed');
+    const data = await res.json();
+    const temp = Math.round(data.current?.temperature_2m);
+    const max = Math.round(data.daily?.temperature_2m_max?.[0]);
+    const min = Math.round(data.daily?.temperature_2m_min?.[0]);
+    const desc = weatherCodeText(data.current?.weather_code);
+    weatherEl.textContent = `无锡 ${desc} ${temp}°C，${min}°/${max}°`;
+  } catch {
+    weatherEl.textContent = '无锡天气暂不可用';
+  }
+}
+
+function weatherCodeText(code) {
+  if (code === 0) return '晴';
+  if ([1, 2, 3].includes(code)) return '多云';
+  if ([45, 48].includes(code)) return '雾';
+  if ([51, 53, 55, 56, 57].includes(code)) return '毛毛雨';
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return '雨';
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return '雪';
+  if ([95, 96, 99].includes(code)) return '雷阵雨';
+  return '天气';
+}
+
 /**
  * checkOffSavedTab(id)
  *
@@ -442,6 +583,80 @@ function showToast(message) {
   setTimeout(() => toast.classList.remove('visible'), 2500);
 }
 
+function escapeAttr(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+async function renderQuickLinks() {
+  const list = document.getElementById('quickLinkList');
+  if (!list) return;
+
+  const quickLinks = await getQuickLinks();
+  const addCard = renderAddQuickLinkCard();
+  list.innerHTML = quickLinks.map(link => {
+    let domain = '';
+    try { domain = new URL(link.url).hostname; } catch {}
+    const faviconUrl = link.url ? getChromeFaviconUrl(link.url, 32) : '';
+    const displayTitle = link.title || domain || link.url;
+    const safeTitle = escapeAttr(displayTitle);
+    const safeUrl = escapeAttr(link.url);
+    const firstLetter = escapeHtml(displayTitle.charAt(0).toUpperCase() || '?');
+
+    return `
+      <a class="quick-link-item" href="${safeUrl}" title="${safeTitle}">
+        <button class="quick-link-delete" type="button" data-action="delete-quick-link" data-quick-link-id="${escapeAttr(link.id)}" title="删除">×</button>
+        <span class="quick-link-icon">
+          ${faviconUrl ? `<img src="${faviconUrl}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">` : ''}
+          <span class="quick-link-fallback" style="${faviconUrl ? 'display:none' : ''}">${firstLetter}</span>
+        </span>
+        <span class="quick-link-title">${escapeHtml(displayTitle)}</span>
+      </a>`;
+  }).join('') + addCard;
+}
+
+function renderQuickLink(link) {
+  const list = document.getElementById('quickLinkList');
+  if (!list) return;
+
+  let domain = '';
+  try { domain = new URL(link.url).hostname; } catch {}
+  const faviconUrl = link.url ? getChromeFaviconUrl(link.url, 32) : '';
+  const displayTitle = link.title || domain || link.url;
+  const safeTitle = escapeAttr(displayTitle);
+  const safeUrl = escapeAttr(link.url);
+  const firstLetter = escapeHtml(displayTitle.charAt(0).toUpperCase() || '?');
+
+  list.querySelector('.quick-link-add-card')?.remove();
+  list.insertAdjacentHTML('beforeend', `
+    <a class="quick-link-item" href="${safeUrl}" title="${safeTitle}">
+      <button class="quick-link-delete" type="button" data-action="delete-quick-link" data-quick-link-id="${escapeAttr(link.id)}" title="删除">×</button>
+      <span class="quick-link-icon">
+        ${faviconUrl ? `<img src="${faviconUrl}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">` : ''}
+        <span class="quick-link-fallback" style="${faviconUrl ? 'display:none' : ''}">${firstLetter}</span>
+      </span>
+      <span class="quick-link-title">${escapeHtml(displayTitle)}</span>
+    </a>${renderAddQuickLinkCard()}`);
+}
+
+function renderAddQuickLinkCard() {
+  return `
+    <button class="quick-link-item quick-link-add-card" type="button" data-action="toggle-quick-link-form" title="添加网址">
+      <span class="quick-link-icon quick-link-add-icon">+</span>
+      <span class="quick-link-title">添加</span>
+    </button>`;
+}
+
 /**
  * checkAndShowEmptyState()
  *
@@ -461,13 +676,13 @@ function checkAndShowEmptyState() {
           <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
         </svg>
       </div>
-      <div class="empty-title">Inbox zero, but for tabs.</div>
-      <div class="empty-subtitle">You're free.</div>
+      <div class="empty-title">标签页已清空</div>
+      <div class="empty-subtitle">现在可以专注了。</div>
     </div>
   `;
 
   const countEl = document.getElementById('openTabsSectionCount');
-  if (countEl) countEl.textContent = '0 domains';
+  if (countEl) countEl.textContent = '0 个网站';
 }
 
 /**
@@ -484,11 +699,11 @@ function timeAgo(dateStr) {
   const diffHours = Math.floor((now - then) / 3600000);
   const diffDays  = Math.floor((now - then) / 86400000);
 
-  if (diffMins < 1)   return 'just now';
-  if (diffMins < 60)  return diffMins + ' min ago';
-  if (diffHours < 24) return diffHours + ' hr' + (diffHours !== 1 ? 's' : '') + ' ago';
-  if (diffDays === 1) return 'yesterday';
-  return diffDays + ' days ago';
+  if (diffMins < 1)   return '刚刚';
+  if (diffMins < 60)  return `${diffMins} 分钟前`;
+  if (diffHours < 24) return `${diffHours} 小时前`;
+  if (diffDays === 1) return '昨天';
+  return `${diffDays} 天前`;
 }
 
 /**
@@ -496,16 +711,16 @@ function timeAgo(dateStr) {
  */
 function getGreeting() {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
+  if (hour < 12) return '早上好';
+  if (hour < 17) return '下午好';
+  return '晚上好';
 }
 
 /**
  * getDateDisplay() — "Friday, April 4, 2026"
  */
 function getDateDisplay() {
-  return new Date().toLocaleDateString('en-US', {
+  return new Date().toLocaleDateString('zh-CN', {
     weekday: 'long',
     year:    'numeric',
     month:   'long',
@@ -585,6 +800,8 @@ const FRIENDLY_DOMAINS = {
   'www.producthunt.com':  'Product Hunt',
   'xiaohongshu.com':      'RedNote',
   'www.xiaohongshu.com':  'RedNote',
+  '127.0.0.1':            '本地网页',
+  'localhost':            '本地网页',
   'local-files':          'Local Files',
 };
 
@@ -772,10 +989,10 @@ function buildOverflowChips(hiddenTabs, urlCounts = {}) {
       ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
       <span class="chip-text">${label}</span>${dupeTag}
       <div class="chip-actions">
-        <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="Save for later">
+        <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="保存到稍后查看">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></svg>
         </button>
-        <button class="chip-action chip-close" data-action="close-single-tab" data-tab-url="${safeUrl}" title="Close this tab">
+        <button class="chip-action chip-close" data-action="close-single-tab" data-tab-url="${safeUrl}" title="关闭此标签页">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
         </button>
       </div>
@@ -785,7 +1002,7 @@ function buildOverflowChips(hiddenTabs, urlCounts = {}) {
   return `
     <div class="page-chips-overflow" style="display:none">${hiddenChips}</div>
     <div class="page-chip page-chip-overflow clickable" data-action="expand-chips">
-      <span class="chip-text">+${hiddenTabs.length} more</span>
+    <span class="chip-text">还有 ${hiddenTabs.length} 个</span>
     </div>`;
 }
 
@@ -815,12 +1032,12 @@ function renderDomainCard(group) {
 
   const tabBadge = `<span class="open-tabs-badge">
     ${ICONS.tabs}
-    ${tabCount} tab${tabCount !== 1 ? 's' : ''} open
+    已打开 ${tabCount} 个
   </span>`;
 
   const dupeBadge = hasDupes
     ? `<span class="open-tabs-badge" style="color:var(--accent-amber);background:rgba(200,113,58,0.08);">
-        ${totalExtras} duplicate${totalExtras !== 1 ? 's' : ''}
+        ${totalExtras} 个重复
       </span>`
     : '';
 
@@ -853,10 +1070,10 @@ function renderDomainCard(group) {
       ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
       <span class="chip-text">${label}</span>${dupeTag}
       <div class="chip-actions">
-        <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="Save for later">
+        <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="保存到稍后查看">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></svg>
         </button>
-        <button class="chip-action chip-close" data-action="close-single-tab" data-tab-url="${safeUrl}" title="Close this tab">
+        <button class="chip-action chip-close" data-action="close-single-tab" data-tab-url="${safeUrl}" title="关闭此标签页">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
         </button>
       </div>
@@ -866,14 +1083,14 @@ function renderDomainCard(group) {
   let actionsHtml = `
     <button class="action-btn close-tabs" data-action="close-domain-tabs" data-domain-id="${stableId}">
       ${ICONS.close}
-      Close all ${tabCount} tab${tabCount !== 1 ? 's' : ''}
+      关闭全部 ${tabCount} 个
     </button>`;
 
   if (hasDupes) {
     const dupeUrlsEncoded = dupeUrls.map(([url]) => encodeURIComponent(url)).join(',');
     actionsHtml += `
       <button class="action-btn" data-action="dedup-keep-one" data-dupe-urls="${dupeUrlsEncoded}">
-        Close ${totalExtras} duplicate${totalExtras !== 1 ? 's' : ''}
+        关闭 ${totalExtras} 个重复标签
       </button>`;
   }
 
@@ -882,7 +1099,7 @@ function renderDomainCard(group) {
       <div class="status-bar"></div>
       <div class="mission-content">
         <div class="mission-top">
-          <span class="mission-name">${isLanding ? 'Homepages' : (group.label || friendlyDomain(group.domain))}</span>
+          <span class="mission-name">${isLanding ? '常用首页' : (group.label || friendlyDomain(group.domain))}</span>
           ${tabBadge}
           ${dupeBadge}
         </div>
@@ -891,7 +1108,7 @@ function renderDomainCard(group) {
       </div>
       <div class="mission-meta">
         <div class="mission-page-count">${tabCount}</div>
-        <div class="mission-page-label">tabs</div>
+        <div class="mission-page-label">标签页</div>
       </div>
     </div>`;
 }
@@ -932,7 +1149,7 @@ async function renderDeferredColumn() {
 
     // Render active checklist items
     if (active.length > 0) {
-      countEl.textContent = `${active.length} item${active.length !== 1 ? 's' : ''}`;
+      countEl.textContent = `${active.length} 项`;
       list.innerHTML = active.map(item => renderDeferredItem(item)).join('');
       list.style.display = 'block';
       empty.style.display = 'none';
@@ -981,7 +1198,7 @@ function renderDeferredItem(item) {
           <span>${ago}</span>
         </div>
       </div>
-      <button class="deferred-dismiss" data-action="dismiss-deferred" data-deferred-id="${item.id}" title="Dismiss">
+      <button class="deferred-dismiss" data-action="dismiss-deferred" data-deferred-id="${item.id}" title="移除">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
       </button>
     </div>`;
@@ -1020,6 +1237,10 @@ function renderArchiveItem(item) {
  * 6. Renders the "Saved for Later" checklist
  */
 async function renderStaticDashboard() {
+  await renderQuickLinks();
+  startFooterClock();
+  loadWuxiWeather();
+
   // --- Header ---
   const greetingEl = document.getElementById('greeting');
   const dateEl     = document.getElementById('dateDisplay');
@@ -1149,8 +1370,8 @@ async function renderStaticDashboard() {
   const openTabsSectionTitle = document.getElementById('openTabsSectionTitle');
 
   if (domainGroups.length > 0 && openTabsSection) {
-    if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Open tabs';
-    openTabsSectionCount.innerHTML = `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''} &nbsp;&middot;&nbsp; <button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} Close all ${realTabs.length} tabs</button>`;
+    if (openTabsSectionTitle) openTabsSectionTitle.textContent = '当前标签页';
+    openTabsSectionCount.innerHTML = `${domainGroups.length} 个网站 &nbsp;&middot;&nbsp; <button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} 关闭全部 ${realTabs.length} 个标签页</button>`;
     openTabsMissionsEl.innerHTML = domainGroups.map(g => renderDomainCard(g)).join('');
     openTabsSection.style.display = 'block';
   } else if (openTabsSection) {
@@ -1169,7 +1390,28 @@ async function renderStaticDashboard() {
 }
 
 async function renderDashboard() {
+  const { tabOutEnabled = true } = await chrome.storage.local.get('tabOutEnabled');
+  if (!tabOutEnabled) {
+    renderPausedNewtab();
+    return;
+  }
+
   await renderStaticDashboard();
+}
+
+function renderPausedNewtab() {
+  document.body.innerHTML = `
+    <main class="paused-newtab">
+      <section class="paused-card">
+        <h1>Tab Out 已暂停</h1>
+        <p>Chrome 不允许扩展在启用时临时恢复原生新标签页。你可以从工具栏图标重新开启 Tab Out，或点击下面按钮打开 Chrome 原生新标签页。</p>
+        <div class="paused-actions">
+          <button class="action-btn" type="button" data-action="open-native-newtab">打开原生新标签页</button>
+          <button class="action-btn primary" type="button" data-action="resume-tabout">重新启用 Tab Out</button>
+        </div>
+      </section>
+    </main>
+    <div class="toast" id="toast"><span id="toastText"></span></div>`;
 }
 
 
@@ -1188,6 +1430,36 @@ document.addEventListener('click', async (e) => {
 
   const action = actionEl.dataset.action;
 
+  if (action === 'open-native-newtab') {
+    chrome.tabs.create({ url: 'chrome://newtab' });
+    return;
+  }
+
+  if (action === 'resume-tabout') {
+    await chrome.storage.local.set({ tabOutEnabled: true });
+    location.reload();
+    return;
+  }
+
+  if (action === 'toggle-quick-link-form') {
+    const form = document.getElementById('quickLinkForm');
+    if (!form) return;
+    form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+    if (form.style.display !== 'none') document.getElementById('quickLinkTitle')?.focus();
+    return;
+  }
+
+  if (action === 'delete-quick-link') {
+    e.preventDefault();
+    e.stopPropagation();
+    const id = actionEl.dataset.quickLinkId;
+    if (!id) return;
+    await deleteQuickLink(id);
+    await renderQuickLinks();
+    showToast('已删除常用网址');
+    return;
+  }
+
   // ---- Close duplicate Tab Out tabs ----
   if (action === 'close-tabout-dupes') {
     await closeTabOutDupes();
@@ -1198,7 +1470,7 @@ document.addEventListener('click', async (e) => {
       banner.style.opacity = '0';
       setTimeout(() => { banner.style.display = 'none'; banner.style.opacity = '1'; }, 400);
     }
-    showToast('Closed extra Tab Out tabs');
+    showToast('已关闭多余的 Tab Out 标签页');
     return;
   }
 
@@ -1260,7 +1532,7 @@ document.addEventListener('click', async (e) => {
     const statTabs = document.getElementById('statTabs');
     if (statTabs) statTabs.textContent = openTabs.length;
 
-    showToast('Tab closed');
+    showToast('已关闭标签页');
     return;
   }
 
@@ -1276,7 +1548,7 @@ document.addEventListener('click', async (e) => {
       await saveTabForLater({ url: tabUrl, title: tabTitle });
     } catch (err) {
       console.error('[tab-out] Failed to save tab:', err);
-      showToast('Failed to save tab');
+      showToast('保存失败');
       return;
     }
 
@@ -1295,7 +1567,7 @@ document.addEventListener('click', async (e) => {
       setTimeout(() => chip.remove(), 200);
     }
 
-    showToast('Saved for later');
+    showToast('已保存到稍后查看');
     await renderDeferredColumn();
     return;
   }
@@ -1368,8 +1640,8 @@ document.addEventListener('click', async (e) => {
     const idx = domainGroups.indexOf(group);
     if (idx !== -1) domainGroups.splice(idx, 1);
 
-    const groupLabel = group.domain === '__landing-pages__' ? 'Homepages' : (group.label || friendlyDomain(group.domain));
-    showToast(`Closed ${urls.length} tab${urls.length !== 1 ? 's' : ''} from ${groupLabel}`);
+    const groupLabel = group.domain === '__landing-pages__' ? '常用首页' : (group.label || friendlyDomain(group.domain));
+    showToast(`已关闭 ${groupLabel} 的 ${urls.length} 个标签页`);
 
     const statTabs = document.getElementById('statTabs');
     if (statTabs) statTabs.textContent = openTabs.length;
@@ -1398,7 +1670,7 @@ document.addEventListener('click', async (e) => {
         setTimeout(() => b.remove(), 200);
       });
       card.querySelectorAll('.open-tabs-badge').forEach(badge => {
-        if (badge.textContent.includes('duplicate')) {
+        if (badge.textContent.includes('重复')) {
           badge.style.transition = 'opacity 0.2s';
           badge.style.opacity    = '0';
           setTimeout(() => badge.remove(), 200);
@@ -1408,7 +1680,7 @@ document.addEventListener('click', async (e) => {
       card.classList.add('has-neutral-bar');
     }
 
-    showToast('Closed duplicates, kept one copy each');
+    showToast('已关闭重复标签，每项保留一个');
     return;
   }
 
@@ -1428,9 +1700,36 @@ document.addEventListener('click', async (e) => {
       animateCardOut(c);
     });
 
-    showToast('All tabs closed. Fresh start.');
+    showToast('已关闭全部标签页');
     return;
   }
+});
+
+document.getElementById('quickLinkForm')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const titleInput = document.getElementById('quickLinkTitle');
+  const urlInput = document.getElementById('quickLinkUrl');
+  const title = titleInput?.value || '';
+  const url = urlInput?.value || '';
+  let result;
+
+  try {
+    result = await addQuickLink({ title, url });
+  } catch {
+    showToast('网址格式不正确');
+    return;
+  }
+
+  e.currentTarget.reset();
+  e.currentTarget.style.display = 'none';
+
+  try {
+    await renderQuickLinks();
+  } catch (err) {
+    console.warn('[tab-out] Quick links render failed:', err);
+  }
+
+  showToast(result?.updated ? '已更新网址' : '已添加网址');
 });
 
 // ---- Archive toggle — expand/collapse the archive section ----
@@ -1469,7 +1768,7 @@ document.addEventListener('input', async (e) => {
     );
 
     archiveList.innerHTML = results.map(item => renderArchiveItem(item)).join('')
-      || '<div style="font-size:12px;color:var(--muted);padding:8px 0">No results</div>';
+      || '<div style="font-size:12px;color:var(--muted);padding:8px 0">没有结果</div>';
   } catch (err) {
     console.warn('[tab-out] Archive search failed:', err);
   }
