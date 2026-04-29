@@ -6,7 +6,28 @@
 
 ## 安装
 
-### 方式一：下载打包版本
+### 推荐方式：让 Agent 学习安装
+
+把下面这段内容发给你的 coding agent、终端助手或支持联网操作的 AI 工具：
+
+```text
+请帮我安装这个 Chrome 新标签页扩展：
+https://github.com/winglight9/tab-out
+
+请先阅读仓库 README 和 MODIFICATIONS.zh-CN.md，然后完成：
+1. 克隆仓库或下载 Release 包。
+2. 找到 extension/ 文件夹。
+3. 打开 chrome://extensions。
+4. 引导我开启开发者模式并加载 extension/ 文件夹。
+```
+
+Agent 需要安装的扩展目录是：
+
+```text
+tab-out/extension/
+```
+
+### 方式二：下载打包版本
 
 1. 打开发布页：<https://github.com/winglight9/tab-out/releases/tag/chinese-custom-v1>
 2. 下载 `tab-out-chinese-custom.zip`。
@@ -17,7 +38,7 @@
 7. 选择解压后的 `extension/` 文件夹。
 8. 打开新标签页即可使用。
 
-### 方式二：从源码安装
+### 方式三：从源码安装
 
 ```bash
 git clone https://github.com/winglight9/tab-out.git
