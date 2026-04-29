@@ -35,6 +35,32 @@ const DEFAULT_QUICK_LINKS = [
   { title: '闲鱼', url: 'https://www.goofish.com' },
 ];
 
+function applyTheme(theme) {
+  const resolvedTheme = theme === 'light' ? 'light' : 'dark';
+  document.body.dataset.theme = resolvedTheme;
+
+  const toggle = document.getElementById('themeToggle');
+  if (!toggle) return;
+
+  const isDark = resolvedTheme === 'dark';
+  toggle.textContent = isDark ? '☀' : '☾';
+  toggle.title = isDark ? '切换为明亮模式' : '切换为黑暗模式';
+  toggle.setAttribute('aria-label', toggle.title);
+}
+
+async function initTheme() {
+  const { tabOutTheme = 'dark' } = await chrome.storage.local.get('tabOutTheme');
+  applyTheme(tabOutTheme);
+}
+
+async function toggleTheme() {
+  const currentTheme = document.body.dataset.theme === 'light' ? 'light' : 'dark';
+  const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  await chrome.storage.local.set({ tabOutTheme: nextTheme });
+  applyTheme(nextTheme);
+  showToast(nextTheme === 'dark' ? '已切换到黑暗模式' : '已切换到明亮模式');
+}
+
 /**
  * fetchOpenTabs()
  *
@@ -1237,6 +1263,7 @@ function renderArchiveItem(item) {
  * 6. Renders the "Saved for Later" checklist
  */
 async function renderStaticDashboard() {
+  await initTheme();
   await renderQuickLinks();
   startFooterClock();
   loadWuxiWeather();
@@ -1429,6 +1456,11 @@ document.addEventListener('click', async (e) => {
   if (!actionEl) return;
 
   const action = actionEl.dataset.action;
+
+  if (action === 'toggle-theme') {
+    await toggleTheme();
+    return;
+  }
 
   if (action === 'open-native-newtab') {
     chrome.tabs.create({ url: 'chrome://newtab' });

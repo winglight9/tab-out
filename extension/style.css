@@ -17,7 +17,33 @@
   --status-cooling: #fdd663;
   --status-abandoned: #f28b82;
   --card-bg: #292a2d;
+  --control-bg: #303134;
+  --control-hover: #3c4043;
+  --control-border: #5f6368;
+  --page-glow: rgba(95, 99, 104, 0.22);
+  --subtle-hover: rgba(232, 234, 237, 0.08);
   --shadow: rgba(0, 0, 0, 0.28);
+}
+
+body[data-theme="light"] {
+  --ink: #202124;
+  --paper: #f8fafd;
+  --warm-gray: #dfe3eb;
+  --muted: #5f6368;
+  --accent-amber: #b06000;
+  --accent-sage: #188038;
+  --accent-slate: #1967d2;
+  --accent-rose: #c5221f;
+  --status-active: #188038;
+  --status-cooling: #b06000;
+  --status-abandoned: #c5221f;
+  --card-bg: #ffffff;
+  --control-bg: #ffffff;
+  --control-hover: #eef2f7;
+  --control-border: #c7ccd6;
+  --page-glow: rgba(138, 180, 248, 0.26);
+  --subtle-hover: rgba(60, 64, 67, 0.08);
+  --shadow: rgba(60, 64, 67, 0.16);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -34,7 +60,7 @@ body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background: radial-gradient(circle at top, rgba(95, 99, 104, 0.22), transparent 42%);
+  background: radial-gradient(circle at top, var(--page-glow), transparent 42%);
   pointer-events: none;
   z-index: 0;
 }
@@ -91,7 +117,7 @@ header {
   font-size: 12px;
   border: 1px solid var(--warm-gray);
   border-radius: 999px;
-  background: #303134;
+  background: var(--control-bg);
   color: var(--ink);
   padding: 7px 14px;
   cursor: pointer;
@@ -99,8 +125,8 @@ header {
 }
 
 .quick-link-form button:hover {
-  background: #3c4043;
-  border-color: #5f6368;
+  background: var(--control-hover);
+  border-color: var(--control-border);
 }
 
 .quick-link-form {
@@ -115,7 +141,7 @@ header {
   flex: 1;
   min-width: 0;
   color: var(--ink);
-  background: #303134;
+  background: var(--control-bg);
   border: 1px solid var(--warm-gray);
   border-radius: 999px;
   padding: 10px 14px;
@@ -154,7 +180,7 @@ header {
 }
 
 .quick-link-item:hover {
-  background: rgba(232, 234, 237, 0.08);
+  background: var(--subtle-hover);
 }
 
 .quick-link-add-card {
@@ -175,7 +201,7 @@ header {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: #303134;
+  background: var(--control-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -211,7 +237,7 @@ header {
   height: 20px;
   border: none;
   border-radius: 50%;
-  background: #3c4043;
+  background: var(--control-hover);
   color: var(--ink);
   cursor: pointer;
   opacity: 0;
@@ -223,7 +249,7 @@ header {
 }
 
 .quick-link-delete:hover {
-  background: #5f6368;
+  background: var(--control-border);
 }
 
 .quick-link-empty {
@@ -788,9 +814,35 @@ footer {
 .footer-local-info {
   text-align: right;
   color: var(--muted);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  align-items: center;
+}
+
+.theme-toggle {
+  grid-row: 1 / span 2;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--warm-gray);
+  border-radius: 50%;
+  background: var(--control-bg);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.theme-toggle:hover {
+  background: var(--control-hover);
+  border-color: var(--control-border);
+  transform: translateY(-1px);
 }
 
 .footer-time {
+  grid-column: 2;
   font-size: 20px;
   color: var(--ink);
   font-weight: 400;
@@ -798,6 +850,7 @@ footer {
 }
 
 .footer-weather {
+  grid-column: 2;
   font-size: 11px;
   margin-top: 4px;
 }
