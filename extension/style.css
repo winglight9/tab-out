@@ -73,6 +73,139 @@ body::before {
   padding: 48px 32px 80px;
 }
 
+/* ---- Finance news side panel ---- */
+.news-panel {
+  position: fixed;
+  left: 24px;
+  top: 140px;
+  z-index: 4;
+  width: 280px;
+  max-height: calc(100vh - 190px);
+  overflow: hidden;
+  border: 1px solid var(--warm-gray);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--card-bg) 88%, transparent);
+  box-shadow: 0 12px 36px var(--shadow);
+  backdrop-filter: blur(12px);
+  animation: fadeUp 0.35s ease both;
+}
+
+.news-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--warm-gray);
+}
+
+.news-panel-header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 3px;
+}
+
+.news-panel-meta {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.news-panel-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.news-panel-actions button,
+.news-panel-opener {
+  border: 1px solid var(--warm-gray);
+  background: var(--control-bg);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.news-panel-actions button {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  line-height: 1;
+}
+
+.news-panel-actions button:hover,
+.news-panel-opener:hover {
+  background: var(--control-hover);
+  border-color: var(--control-border);
+  color: var(--ink);
+}
+
+.news-panel-opener {
+  position: fixed;
+  left: 24px;
+  bottom: 32px;
+  z-index: 4;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  box-shadow: 0 8px 24px var(--shadow);
+}
+
+.news-list {
+  max-height: calc(100vh - 252px);
+  overflow-y: auto;
+  padding: 4px 14px 10px;
+}
+
+.news-item {
+  display: block;
+  padding: 10px 0;
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--warm-gray) 62%, transparent);
+}
+
+.news-item:last-child {
+  border-bottom: none;
+}
+
+.news-item:hover .news-title {
+  color: var(--accent-slate);
+}
+
+.news-source {
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.news-title {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color 0.15s;
+}
+
+.news-empty {
+  padding: 18px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.news-panel.loading .news-list {
+  opacity: 0.65;
+}
+
 /* When the saved-for-later sidebar is open, expand the container
    so the tab grid still has room for 2-3 columns */
 .container:has(.dashboard-columns) {
@@ -1186,6 +1319,22 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   .deferred-column {
     width: 100%;
     position: static;
+  }
+}
+
+@media (max-width: 1200px) {
+  .news-panel {
+    top: 96px;
+    left: 16px;
+    width: min(300px, calc(100vw - 32px));
+    max-height: calc(100vh - 150px);
+  }
+  .news-list {
+    max-height: calc(100vh - 212px);
+  }
+  .news-panel-opener {
+    left: 16px;
+    bottom: 24px;
   }
 }
 

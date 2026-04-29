@@ -2,7 +2,7 @@
 
 本仓库基于原项目 **Tab Out** 修改而来，保留原作者、原许可证和原项目链接。
 
-当前版本：`V0.02`
+当前版本：`V0.03`
 
 ## 原项目引用
 
@@ -18,6 +18,7 @@
 - 将整体视觉改为接近 Chrome 原生新标签页的暗色风格。
 - 增加“黑暗模式”和明亮模式一键切换，默认使用黑暗模式。
 - 增加顶部快捷网址区域，支持添加、删除、自动获取网站图标。
+- 增加左侧可隐藏财经快讯栏，支持 15 分钟缓存、手动刷新和失败回退。
 - 默认写入 Bilibili、V2EX、YouTube、微博、闲鱼 5 个快捷网址。
 - 快捷网址使用 `chrome.storage.local` 本地保存，不上传到外部服务。
 - 右下角显示当前时间和无锡天气。
@@ -27,6 +28,7 @@
 ## 第三方与外部服务引用
 
 - 天气数据: [Open-Meteo Forecast API](https://open-meteo.com/)
+- 财经快讯: [Google News RSS](https://news.google.com/)、[FT 中文网 RSS](https://www.ftchinese.com/rss/news)、[36氪 RSS](https://36kr.com/feed)
 - 网站图标: Chrome Manifest V3 `_favicon` 机制，需要 `favicon` 权限。
 - 浏览器 API: Chrome Extensions API，包括 `tabs`、`storage`、`favicon`、`chrome_url_overrides`。
 

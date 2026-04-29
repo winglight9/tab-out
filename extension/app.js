@@ -35,6 +35,23 @@ const DEFAULT_QUICK_LINKS = [
   { title: '闲鱼', url: 'https://www.goofish.com' },
 ];
 
+const FINANCE_NEWS_CACHE_TTL = 15 * 60 * 1000;
+const FINANCE_NEWS_LIMIT = 6;
+const FINANCE_NEWS_SOURCES = [
+  {
+    name: 'Google News',
+    url: 'https://news.google.com/rss/search?q=%E8%B4%A2%E7%BB%8F%20OR%20%E7%BE%8E%E8%82%A1%20OR%20A%E8%82%A1%20OR%20%E6%B8%AF%E8%82%A1%20OR%20%E5%AE%8F%E8%A7%82%E7%BB%8F%E6%B5%8E&hl=zh-CN&gl=CN&ceid=CN:zh-Hans',
+  },
+  {
+    name: 'FT中文网',
+    url: 'https://www.ftchinese.com/rss/news',
+  },
+  {
+    name: '36氪',
+    url: 'https://36kr.com/feed',
+  },
+];
+
 function applyTheme(theme) {
   const resolvedTheme = theme === 'light' ? 'light' : 'dark';
   document.body.dataset.theme = resolvedTheme;
@@ -59,6 +76,178 @@ async function toggleTheme() {
   await chrome.storage.local.set({ tabOutTheme: nextTheme });
   applyTheme(nextTheme);
   showToast(nextTheme === 'dark' ? '已切换到黑暗模式' : '已切换到明亮模式');
+}
+
+async function initFinanceNewsPanel() {
+  const panel = document.getElementById('financeNewsPanel');
+  const opener = document.getElementById('financeNewsOpener');
+  if (!panel || !opener) return;
+
+  const { financeNewsVisible } = await chrome.storage.local.get('financeNewsVisible');
+  const shouldShow = financeNewsVisible !== false && window.innerWidth >= 1200;
+  setFinanceNewsVisibility(shouldShow);
+
+  if (shouldShow) {
+    loadFinanceNews({ force: false });
+  }
+}
+
+function setFinanceNewsVisibility(visible) {
+  const panel = document.getElementById('financeNewsPanel');
+  const opener = document.getElementById('financeNewsOpener');
+  if (!panel || !opener) return;
+
+  panel.style.display = visible ? 'block' : 'none';
+  opener.style.display = visible ? 'none' : 'block';
+}
+
+async function showFinanceNewsPanel() {
+  await chrome.storage.local.set({ financeNewsVisible: true });
+  setFinanceNewsVisibility(true);
+  loadFinanceNews({ force: false });
+}
+
+async function hideFinanceNewsPanel() {
+  await chrome.storage.local.set({ financeNewsVisible: false });
+  setFinanceNewsVisibility(false);
+}
+
+async function loadFinanceNews({ force = false } = {}) {
+  const panel = document.getElementById('financeNewsPanel');
+  const meta = document.getElementById('financeNewsMeta');
+  if (!panel || !meta) return;
+
+  const { financeNewsCache = null } = await chrome.storage.local.get('financeNewsCache');
+  const cacheIsFresh = financeNewsCache?.fetchedAt && Date.now() - financeNewsCache.fetchedAt < FINANCE_NEWS_CACHE_TTL;
+
+  if (financeNewsCache?.items?.length) {
+    renderFinanceNews(financeNewsCache.items, financeNewsCache.fetchedAt, cacheIsFresh ? '缓存' : '上次缓存');
+  } else {
+    renderFinanceNewsEmpty('正在加载财经新闻...');
+  }
+
+  if (!force && cacheIsFresh) return;
+
+  panel.classList.add('loading');
+  meta.textContent = force ? '正在刷新...' : '正在更新...';
+
+  try {
+    const result = await fetchFinanceNewsWithFallback();
+    await chrome.storage.local.set({ financeNewsCache: result });
+    renderFinanceNews(result.items, result.fetchedAt, result.source);
+  } catch (err) {
+    console.warn('[tab-out] Finance news failed:', err);
+    if (financeNewsCache?.items?.length) {
+      renderFinanceNews(financeNewsCache.items, financeNewsCache.fetchedAt, '使用上次缓存');
+    } else {
+      renderFinanceNewsEmpty('财经新闻暂不可用');
+    }
+  } finally {
+    panel.classList.remove('loading');
+  }
+}
+
+async function fetchFinanceNewsWithFallback() {
+  for (const source of FINANCE_NEWS_SOURCES) {
+    try {
+      const items = await fetchFinanceNewsSource(source);
+      if (items.length > 0) {
+        return {
+          source: source.name,
+          fetchedAt: Date.now(),
+          items: items.slice(0, FINANCE_NEWS_LIMIT),
+        };
+      }
+    } catch (err) {
+      console.warn(`[tab-out] ${source.name} news failed:`, err);
+    }
+  }
+  throw new Error('all-news-sources-failed');
+}
+
+async function fetchFinanceNewsSource(source) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const res = await fetch(source.url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`http-${res.status}`);
+    const xml = await res.text();
+    return parseRssItems(xml, source.name);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function parseRssItems(xml, fallbackSource) {
+  const doc = new DOMParser().parseFromString(xml, 'text/xml');
+  const items = [...doc.querySelectorAll('item')];
+  const seen = new Set();
+
+  return items.map(item => {
+    const title = getXmlText(item, 'title');
+    const link = getXmlText(item, 'link');
+    const pubDate = getXmlText(item, 'pubDate');
+    const source = getXmlText(item, 'source') || fallbackSource;
+    const timestamp = pubDate ? Date.parse(pubDate) : 0;
+    return { title: stripHtml(title), link, source: stripHtml(source), pubDate, timestamp };
+  }).filter(item => {
+    if (!item.title || !item.link || seen.has(item.link)) return false;
+    seen.add(item.link);
+    return true;
+  });
+}
+
+function getXmlText(parent, selector) {
+  return parent.querySelector(selector)?.textContent?.trim() || '';
+}
+
+function stripHtml(value) {
+  const div = document.createElement('div');
+  div.innerHTML = value || '';
+  return (div.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+function renderFinanceNews(items, fetchedAt, label) {
+  const list = document.getElementById('financeNewsList');
+  const meta = document.getElementById('financeNewsMeta');
+  if (!list || !meta) return;
+
+  meta.textContent = `${label} · ${formatNewsTime(fetchedAt)}`;
+  list.innerHTML = items.slice(0, FINANCE_NEWS_LIMIT).map(item => `
+    <a class="news-item" href="${escapeAttr(item.link)}" target="_blank" rel="noopener noreferrer">
+      <div class="news-source">${escapeHtml(item.source || '财经')} · ${formatRelativeTime(item.timestamp || fetchedAt)}</div>
+      <div class="news-title">${escapeHtml(item.title)}</div>
+    </a>
+  `).join('');
+}
+
+function renderFinanceNewsEmpty(message) {
+  const list = document.getElementById('financeNewsList');
+  const meta = document.getElementById('financeNewsMeta');
+  if (!list || !meta) return;
+
+  meta.textContent = message;
+  list.innerHTML = `<div class="news-empty">${escapeHtml(message)}</div>`;
+}
+
+function formatNewsTime(timestamp) {
+  if (!timestamp) return '未更新';
+  return new Date(timestamp).toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+function formatRelativeTime(timestamp) {
+  if (!timestamp) return '刚刚';
+  const diffMins = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
+  if (diffMins < 1) return '刚刚';
+  if (diffMins < 60) return `${diffMins} 分钟前`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours} 小时前`;
+  return `${Math.floor(diffHours / 24)} 天前`;
 }
 
 /**
@@ -1264,6 +1453,7 @@ function renderArchiveItem(item) {
  */
 async function renderStaticDashboard() {
   await initTheme();
+  initFinanceNewsPanel();
   await renderQuickLinks();
   startFooterClock();
   loadWuxiWeather();
@@ -1459,6 +1649,21 @@ document.addEventListener('click', async (e) => {
 
   if (action === 'toggle-theme') {
     await toggleTheme();
+    return;
+  }
+
+  if (action === 'refresh-finance-news') {
+    await loadFinanceNews({ force: true });
+    return;
+  }
+
+  if (action === 'hide-finance-news') {
+    await hideFinanceNewsPanel();
+    return;
+  }
+
+  if (action === 'show-finance-news') {
+    await showFinanceNewsPanel();
     return;
   }
 
