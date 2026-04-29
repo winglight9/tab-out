@@ -2,6 +2,8 @@
 
 本仓库基于原项目 **Tab Out** 修改而来，保留原作者、原许可证和原项目链接。
 
+当前版本：`v0.01`
+
 ## 原项目引用
 
 - 原项目: [zarazhangrui/tab-out](https://github.com/zarazhangrui/tab-out)
