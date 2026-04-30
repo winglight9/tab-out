@@ -87,6 +87,39 @@ chrome.tabs.onUpdated.addListener(() => {
   updateBadge();
 });
 
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type !== 'fetch-finance-news-source') return false;
+
+  fetchFinanceNewsSource(message.source)
+    .then(body => sendResponse({ ok: true, body }))
+    .catch(err => sendResponse({ ok: false, error: err?.message || String(err) }));
+
+  return true;
+});
+
+async function fetchFinanceNewsSource(source) {
+  if (!source?.url) throw new Error('missing-news-url');
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const res = await fetch(source.url, {
+      signal: controller.signal,
+      cache: 'no-store',
+      headers: {
+        accept: source.type === 'json' ? 'application/json,text/plain,*/*' : 'application/rss+xml,application/xml,text/xml,*/*',
+      },
+    });
+    if (!res.ok) throw new Error(`${source.name || 'news'} http-${res.status}`);
+    const body = await res.text();
+    if (!body || body.trim().length === 0) throw new Error(`${source.name || 'news'} empty-response`);
+    return body;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 // ─── Initial run ─────────────────────────────────────────────────────────────
 
 // Run once immediately when the service worker first loads

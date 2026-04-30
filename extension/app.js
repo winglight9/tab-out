@@ -50,6 +50,11 @@ const FINANCE_NEWS_SOURCES = [
     name: '36氪',
     url: 'https://36kr.com/feed',
   },
+  {
+    name: 'GDELT',
+    type: 'json',
+    url: 'https://api.gdeltproject.org/api/v2/doc/doc?query=%E8%B4%A2%E7%BB%8F%20OR%20%E8%82%A1%E5%B8%82%20OR%20%E9%87%91%E8%9E%8D&mode=artlist&format=json&maxrecords=20&sort=hybridrel',
+  },
 ];
 
 function applyTheme(theme) {
@@ -140,7 +145,7 @@ async function loadFinanceNews({ force = false } = {}) {
     if (financeNewsCache?.items?.length) {
       renderFinanceNews(financeNewsCache.items, financeNewsCache.fetchedAt, '使用上次缓存');
     } else {
-      renderFinanceNewsEmpty('财经新闻暂不可用');
+      renderFinanceNewsEmpty('财经新闻暂不可用，请确认扩展已允许访问新闻源');
     }
   } finally {
     panel.classList.remove('loading');
@@ -166,17 +171,20 @@ async function fetchFinanceNewsWithFallback() {
 }
 
 async function fetchFinanceNewsSource(source) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  const response = await chrome.runtime.sendMessage({
+    type: 'fetch-finance-news-source',
+    source,
+  });
 
-  try {
-    const res = await fetch(source.url, { signal: controller.signal });
-    if (!res.ok) throw new Error(`http-${res.status}`);
-    const xml = await res.text();
-    return parseRssItems(xml, source.name);
-  } finally {
-    clearTimeout(timeoutId);
+  if (!response?.ok) {
+    throw new Error(response?.error || 'news-fetch-failed');
   }
+
+  if (source.type === 'json') {
+    return parseGdeltItems(response.body, source.name);
+  }
+
+  return parseRssItems(response.body, source.name);
 }
 
 function parseRssItems(xml, fallbackSource) {
@@ -191,6 +199,27 @@ function parseRssItems(xml, fallbackSource) {
     const source = getXmlText(item, 'source') || fallbackSource;
     const timestamp = pubDate ? Date.parse(pubDate) : 0;
     return { title: stripHtml(title), link, source: stripHtml(source), pubDate, timestamp };
+  }).filter(item => {
+    if (!item.title || !item.link || seen.has(item.link)) return false;
+    seen.add(item.link);
+    return true;
+  });
+}
+
+function parseGdeltItems(jsonText, fallbackSource) {
+  let data;
+  try { data = JSON.parse(jsonText); }
+  catch { return []; }
+
+  const articles = Array.isArray(data.articles) ? data.articles : [];
+  const seen = new Set();
+
+  return articles.map(article => {
+    const title = stripHtml(article.title || '');
+    const link = article.url || '';
+    const source = stripHtml(article.domain || fallbackSource);
+    const timestamp = article.seendate ? Date.parse(article.seendate) : 0;
+    return { title, link, source, pubDate: article.seendate || '', timestamp };
   }).filter(item => {
     if (!item.title || !item.link || seen.has(item.link)) return false;
     seen.add(item.link);

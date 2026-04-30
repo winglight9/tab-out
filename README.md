@@ -2,7 +2,7 @@
 
 一个面向中文用户定制的 Chrome 新标签页扩展：暗色背景、快捷网址、标签页分组、稍后查看、财经快讯、无锡天气和本地时间。
 
-当前版本：`V0.03`
+当前版本：`V0.04`
 
 本项目基于 [zarazhangrui/tab-out](https://github.com/zarazhangrui/tab-out) 修改，原作者为 [Zara Zhang](https://x.com/zarazhangrui)，许可证为 MIT License。原作者信息和修改说明见 [`MODIFICATIONS.zh-CN.md`](./MODIFICATIONS.zh-CN.md)。
 
@@ -31,8 +31,8 @@ tab-out/extension/
 
 ### 方式二：下载打包版本
 
-1. 打开发布页：<https://github.com/winglight9/tab-out/releases/tag/V0.03>
-2. 下载 `tab-out-V0.03.zip`。
+1. 打开发布页：<https://github.com/winglight9/tab-out/releases/tag/V0.04>
+2. 下载 `tab-out-V0.04.zip`。
 3. 解压 zip 文件。
 4. 打开 Chrome，进入 `chrome://extensions`。
 5. 打开右上角“开发者模式”。
@@ -94,7 +94,7 @@ Chrome 不提供扩展在启用状态下临时撤销 `chrome_url_overrides.newta
 - 稍后查看列表保存在 `chrome.storage.local`。
 - 标签页信息只在本地读取和渲染。
 - 天气数据来自 [Open-Meteo Forecast API](https://open-meteo.com/)。
-- 财经快讯来自 Google News RSS、FT 中文网 RSS 和 36氪 RSS，失败时优先显示本地缓存。
+- 财经快讯来自 Google News RSS、FT 中文网 RSS、36氪 RSS 和 GDELT 兜底源，失败时优先显示本地缓存。
 - 网站图标使用 Chrome Manifest V3 `_favicon` 机制。
 
 ## 技术栈
