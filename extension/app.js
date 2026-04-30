@@ -26,37 +26,34 @@
 // All open tabs — populated by fetchOpenTabs()
 let openTabs = [];
 let footerClockTimer = null;
-let financeNewsAutoRefreshTimer = null;
+let draggedQuickLinkId = null;
+let suppressQuickLinkClick = false;
+let editingQuickLinkId = null;
+let toastHideTimer = null;
+let bookmarkBarNode = null;
+let bookmarkFlyoutCloseTimer = null;
 
 const DEFAULT_QUICK_LINKS = [
+  { title: 'GitHub', url: 'https://github.com' },
+  { title: 'ChatGPT', url: 'https://chatgpt.com' },
+  { title: 'Claude', url: 'https://claude.ai' },
+  { title: 'Google', url: 'https://www.google.com' },
+  { title: 'Gmail', url: 'https://mail.google.com' },
+  { title: 'X', url: 'https://x.com' },
+  { title: 'LinkedIn', url: 'https://www.linkedin.com' },
   { title: 'Bilibili', url: 'https://www.bilibili.com' },
   { title: 'V2EX', url: 'https://www.v2ex.com' },
   { title: 'YouTube', url: 'https://www.youtube.com' },
   { title: '微博', url: 'https://weibo.com' },
   { title: '闲鱼', url: 'https://www.goofish.com' },
+  { title: '淘宝', url: 'https://www.taobao.com' },
+  { title: '京东', url: 'https://www.jd.com' },
+  { title: '知乎', url: 'https://www.zhihu.com' },
+  { title: '小红书', url: 'https://www.xiaohongshu.com' },
+  { title: '豆瓣', url: 'https://www.douban.com' },
+  { title: 'Notion', url: 'https://www.notion.so' },
 ];
-
-const FINANCE_NEWS_CACHE_TTL = 15 * 60 * 1000;
-const FINANCE_NEWS_LIMIT = 12;
-const FINANCE_NEWS_SOURCES = [
-  {
-    name: 'Google News',
-    url: 'https://news.google.com/rss/search?q=%E8%B4%A2%E7%BB%8F%20OR%20%E7%BE%8E%E8%82%A1%20OR%20A%E8%82%A1%20OR%20%E6%B8%AF%E8%82%A1%20OR%20%E5%AE%8F%E8%A7%82%E7%BB%8F%E6%B5%8E&hl=zh-CN&gl=CN&ceid=CN:zh-Hans',
-  },
-  {
-    name: 'FT中文网',
-    url: 'https://www.ftchinese.com/rss/news',
-  },
-  {
-    name: '36氪',
-    url: 'https://36kr.com/feed',
-  },
-  {
-    name: 'GDELT',
-    type: 'json',
-    url: 'https://api.gdeltproject.org/api/v2/doc/doc?query=%E8%B4%A2%E7%BB%8F%20OR%20%E8%82%A1%E5%B8%82%20OR%20%E9%87%91%E8%9E%8D&mode=artlist&format=json&maxrecords=20&sort=hybridrel',
-  },
-];
+const DEFAULT_QUICK_LINKS_VERSION = 2;
 
 function applyTheme(theme) {
   const resolvedTheme = theme === 'light' ? 'light' : 'dark';
@@ -84,219 +81,196 @@ async function toggleTheme() {
   showToast(nextTheme === 'dark' ? '已切换到黑暗模式' : '已切换到明亮模式');
 }
 
-async function initFinanceNewsPanel() {
-  const panel = document.getElementById('financeNewsPanel');
-  const opener = document.getElementById('financeNewsOpener');
-  if (!panel || !opener) return;
+async function initBookmarkSidebar() {
+  const sidebar = document.getElementById('bookmarkSidebar');
+  const list = document.getElementById('bookmarkList');
+  const meta = document.getElementById('bookmarkSidebarMeta');
+  if (!sidebar || !list || !meta) return;
 
-  const { financeNewsVisible } = await chrome.storage.local.get('financeNewsVisible');
-  const shouldShow = financeNewsVisible !== false && window.innerWidth >= 1200;
-  setFinanceNewsVisibility(shouldShow);
-
-  if (shouldShow) {
-    loadFinanceNews({ force: false });
-    startFinanceNewsAutoRefresh();
+  if (!chrome.bookmarks) {
+    meta.textContent = '需要书签权限';
+    list.innerHTML = '<div class="bookmark-empty">无法读取 Chrome 书签。</div>';
+    return;
   }
-}
-
-function setFinanceNewsVisibility(visible) {
-  const panel = document.getElementById('financeNewsPanel');
-  const opener = document.getElementById('financeNewsOpener');
-  if (!panel || !opener) return;
-
-  panel.style.display = visible ? 'block' : 'none';
-  opener.style.display = visible ? 'none' : 'block';
-}
-
-async function showFinanceNewsPanel() {
-  await chrome.storage.local.set({ financeNewsVisible: true });
-  setFinanceNewsVisibility(true);
-  loadFinanceNews({ force: false });
-  startFinanceNewsAutoRefresh();
-}
-
-async function hideFinanceNewsPanel() {
-  await chrome.storage.local.set({ financeNewsVisible: false });
-  stopFinanceNewsAutoRefresh();
-  setFinanceNewsVisibility(false);
-}
-
-function startFinanceNewsAutoRefresh() {
-  stopFinanceNewsAutoRefresh();
-  financeNewsAutoRefreshTimer = setInterval(() => {
-    const panel = document.getElementById('financeNewsPanel');
-    if (!panel || panel.style.display === 'none') return;
-    loadFinanceNews({ force: true });
-  }, FINANCE_NEWS_CACHE_TTL);
-}
-
-function stopFinanceNewsAutoRefresh() {
-  if (financeNewsAutoRefreshTimer) {
-    clearInterval(financeNewsAutoRefreshTimer);
-    financeNewsAutoRefreshTimer = null;
-  }
-}
-
-async function loadFinanceNews({ force = false } = {}) {
-  const panel = document.getElementById('financeNewsPanel');
-  const meta = document.getElementById('financeNewsMeta');
-  if (!panel || !meta) return;
-
-  const { financeNewsCache = null } = await chrome.storage.local.get('financeNewsCache');
-  const cacheIsFresh = financeNewsCache?.fetchedAt && Date.now() - financeNewsCache.fetchedAt < FINANCE_NEWS_CACHE_TTL;
-
-  if (financeNewsCache?.items?.length) {
-    renderFinanceNews(financeNewsCache.items, financeNewsCache.fetchedAt, cacheIsFresh ? '缓存' : '上次缓存');
-  } else {
-    renderFinanceNewsEmpty('正在加载财经新闻...');
-  }
-
-  if (!force && cacheIsFresh) return;
-
-  panel.classList.add('loading');
-  meta.textContent = force ? '正在刷新...' : '正在更新...';
 
   try {
-    const result = await fetchFinanceNewsWithFallback();
-    await chrome.storage.local.set({ financeNewsCache: result });
-    renderFinanceNews(result.items, result.fetchedAt, result.source);
+    const tree = await chrome.bookmarks.getTree();
+    bookmarkBarNode = findBookmarkBarNode(tree);
+    if (!bookmarkBarNode) {
+      meta.textContent = '未找到书签栏';
+      list.innerHTML = '<div class="bookmark-empty">书签栏为空。</div>';
+      return;
+    }
+
+    const children = bookmarkBarNode.children || [];
+    meta.textContent = `${countBookmarks(children)} 个书签`;
+    renderBookmarkList(children);
+    sidebar.style.display = window.innerWidth >= 900 ? 'block' : 'none';
   } catch (err) {
-    console.warn('[tab-out] Finance news failed:', err);
-    if (financeNewsCache?.items?.length) {
-      renderFinanceNews(financeNewsCache.items, financeNewsCache.fetchedAt, '使用上次缓存');
-    } else {
-      renderFinanceNewsEmpty('财经新闻暂不可用，请确认扩展已允许访问新闻源');
-    }
-  } finally {
-    panel.classList.remove('loading');
+    console.warn('[tab-out] Could not load bookmarks:', err);
+    meta.textContent = '读取失败';
+    list.innerHTML = '<div class="bookmark-empty">书签读取失败，请确认扩展已允许访问书签。</div>';
   }
 }
 
-async function fetchFinanceNewsWithFallback() {
-  for (const source of FINANCE_NEWS_SOURCES) {
-    try {
-      const items = await fetchFinanceNewsSource(source);
-      if (items.length > 0) {
-        return {
-          source: source.name,
-          fetchedAt: Date.now(),
-          items: items.slice(0, FINANCE_NEWS_LIMIT),
-        };
-      }
-    } catch (err) {
-      console.warn(`[tab-out] ${source.name} news failed:`, err);
-    }
+function findBookmarkBarNode(tree) {
+  const root = Array.isArray(tree) ? tree[0] : null;
+  const children = root?.children || [];
+  return children.find(node => node.id === '1')
+    || children.find(node => /^(bookmarks bar|书签栏|書籤列)$/i.test(node.title || ''))
+    || children[0]
+    || null;
+}
+
+function countBookmarks(nodes = []) {
+  return nodes.reduce((count, node) => {
+    if (node.url) return count + 1;
+    return count + countBookmarks(node.children || []);
+  }, 0);
+}
+
+function flattenBookmarks(nodes = []) {
+  return nodes.flatMap(node => node.url ? [node] : flattenBookmarks(node.children || []));
+}
+
+function renderBookmarkList(nodes, query = '') {
+  const list = document.getElementById('bookmarkList');
+  if (!list) return;
+
+  const trimmedQuery = query.trim().toLowerCase();
+  if (trimmedQuery) {
+    const matches = flattenBookmarks(nodes).filter(node =>
+      (node.title || '').toLowerCase().includes(trimmedQuery) ||
+      (node.url || '').toLowerCase().includes(trimmedQuery)
+    );
+    list.innerHTML = matches.length
+      ? matches.map(node => renderBookmarkItem(node, 0)).join('')
+      : '<div class="bookmark-empty">没有匹配的书签。</div>';
+    closeBookmarkFlyoutsNow();
+    return;
   }
-  throw new Error('all-news-sources-failed');
+
+  list.innerHTML = nodes.length
+    ? nodes.map(node => renderBookmarkItem(node, 0)).join('')
+    : '<div class="bookmark-empty">书签栏为空。</div>';
 }
 
-async function fetchFinanceNewsSource(source) {
-  const response = await chrome.runtime.sendMessage({
-    type: 'fetch-finance-news-source',
-    source,
-  });
+function renderBookmarkItem(node, level) {
+  const title = node.title || node.url || '未命名';
+  const safeTitle = escapeAttr(title);
 
-  if (!response?.ok) {
-    throw new Error(response?.error || 'news-fetch-failed');
+  if (node.url) {
+    const faviconUrl = getChromeFaviconUrl(node.url, 16);
+    return `
+      <button class="bookmark-item bookmark-link" type="button" data-action="open-bookmark" data-bookmark-url="${escapeAttr(node.url)}" data-bookmark-title="${safeTitle}" title="${safeTitle}">
+        <span class="bookmark-icon"><img src="${faviconUrl}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'"><span class="bookmark-fallback">${escapeHtml(title.charAt(0).toUpperCase() || '?')}</span></span>
+        <span class="bookmark-title">${escapeHtml(title)}</span>
+      </button>`;
   }
 
-  if (source.type === 'json') {
-    return parseGdeltItems(response.body, source.name);
+  const hasChildren = (node.children || []).length > 0;
+  return `
+    <button class="bookmark-item bookmark-folder${hasChildren ? '' : ' is-empty'}" type="button" data-action="open-bookmark-folder" data-bookmark-folder-id="${escapeAttr(node.id)}" data-bookmark-level="${level}" title="${safeTitle}">
+      <span class="bookmark-folder-icon">▸</span>
+      <span class="bookmark-title">${escapeHtml(title)}</span>
+      ${hasChildren ? '<span class="bookmark-chevron">›</span>' : ''}
+    </button>`;
+}
+
+function showBookmarkNameTooltip(item) {
+  const title = item?.dataset.bookmarkTitle;
+  if (!title) return;
+
+  let tooltip = document.getElementById('bookmarkNameTooltip');
+  if (!tooltip) {
+    tooltip = document.createElement('div');
+    tooltip.id = 'bookmarkNameTooltip';
+    tooltip.className = 'bookmark-name-tooltip';
+    document.body.appendChild(tooltip);
   }
 
-  return parseRssItems(response.body, source.name);
+  tooltip.textContent = title;
+  tooltip.style.display = 'block';
+
+  const rect = item.getBoundingClientRect();
+  const gap = 10;
+  const tooltipWidth = Math.min(360, Math.max(180, tooltip.offsetWidth || 180));
+  let left = rect.right + gap;
+  if (left + tooltipWidth > window.innerWidth - 12) left = Math.max(12, rect.left - tooltipWidth - gap);
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${Math.max(12, rect.top + rect.height / 2)}px`;
 }
 
-function parseRssItems(xml, fallbackSource) {
-  const doc = new DOMParser().parseFromString(xml, 'text/xml');
-  const items = [...doc.querySelectorAll('item')];
-  const seen = new Set();
+function hideBookmarkNameTooltip() {
+  const tooltip = document.getElementById('bookmarkNameTooltip');
+  if (tooltip) tooltip.style.display = 'none';
+}
 
-  return items.map(item => {
-    const title = getXmlText(item, 'title');
-    const link = getXmlText(item, 'link');
-    const pubDate = getXmlText(item, 'pubDate');
-    const source = getXmlText(item, 'source') || fallbackSource;
-    const timestamp = pubDate ? Date.parse(pubDate) : 0;
-    return { title: stripHtml(title), link, source: stripHtml(source), pubDate, timestamp };
-  }).filter(item => {
-    if (!item.title || !item.link || seen.has(item.link)) return false;
-    seen.add(item.link);
-    return true;
+function findBookmarkNode(id, nodes = bookmarkBarNode ? [bookmarkBarNode] : []) {
+  for (const node of nodes) {
+    if (node.id === id) return node;
+    const match = findBookmarkNode(id, node.children || []);
+    if (match) return match;
+  }
+  return null;
+}
+
+function clearBookmarkFlyoutTimer() {
+  if (bookmarkFlyoutCloseTimer) {
+    clearTimeout(bookmarkFlyoutCloseTimer);
+    bookmarkFlyoutCloseTimer = null;
+  }
+}
+
+function closeBookmarkFlyoutsNow() {
+  clearBookmarkFlyoutTimer();
+  document.getElementById('bookmarkFlyoutLayer')?.replaceChildren();
+}
+
+function scheduleCloseBookmarkFlyouts() {
+  clearBookmarkFlyoutTimer();
+  bookmarkFlyoutCloseTimer = setTimeout(closeBookmarkFlyoutsNow, 180);
+}
+
+function clearBookmarkFlyoutsFrom(level) {
+  document.querySelectorAll('.bookmark-flyout').forEach(flyout => {
+    if (Number(flyout.dataset.level || 0) >= level) flyout.remove();
+  });
+  document.querySelectorAll('.bookmark-folder.is-open').forEach(folder => {
+    if (Number(folder.dataset.bookmarkLevel || 0) >= level - 1) folder.classList.remove('is-open');
   });
 }
 
-function parseGdeltItems(jsonText, fallbackSource) {
-  let data;
-  try { data = JSON.parse(jsonText); }
-  catch { return []; }
+function openBookmarkFlyout(folderId, anchorEl) {
+  const layer = document.getElementById('bookmarkFlyoutLayer');
+  const folder = findBookmarkNode(folderId);
+  if (!layer || !folder || !(folder.children || []).length || !anchorEl) return;
 
-  const articles = Array.isArray(data.articles) ? data.articles : [];
-  const seen = new Set();
+  clearBookmarkFlyoutTimer();
+  const level = Number(anchorEl.dataset.bookmarkLevel || 0) + 1;
+  clearBookmarkFlyoutsFrom(level);
+  anchorEl.classList.add('is-open');
 
-  return articles.map(article => {
-    const title = stripHtml(article.title || '');
-    const link = article.url || '';
-    const source = stripHtml(article.domain || fallbackSource);
-    const timestamp = article.seendate ? Date.parse(article.seendate) : 0;
-    return { title, link, source, pubDate: article.seendate || '', timestamp };
-  }).filter(item => {
-    if (!item.title || !item.link || seen.has(item.link)) return false;
-    seen.add(item.link);
-    return true;
-  });
+  const flyout = document.createElement('div');
+  flyout.className = 'bookmark-flyout';
+  flyout.dataset.level = String(level);
+  flyout.innerHTML = (folder.children || []).map(node => renderBookmarkItem(node, level)).join('');
+  layer.appendChild(flyout);
+
+  const rect = anchorEl.getBoundingClientRect();
+  const width = 260;
+  const gap = 8;
+  let left = rect.right + gap;
+  if (left + width > window.innerWidth - 12) left = Math.max(12, rect.left - width - gap);
+  const maxTop = window.innerHeight - flyout.offsetHeight - 12;
+  const top = Math.max(12, Math.min(rect.top, maxTop));
+  flyout.style.left = `${left}px`;
+  flyout.style.top = `${top}px`;
 }
 
-function getXmlText(parent, selector) {
-  return parent.querySelector(selector)?.textContent?.trim() || '';
-}
-
-function stripHtml(value) {
-  const div = document.createElement('div');
-  div.innerHTML = value || '';
-  return (div.textContent || '').replace(/\s+/g, ' ').trim();
-}
-
-function renderFinanceNews(items, fetchedAt, label) {
-  const list = document.getElementById('financeNewsList');
-  const meta = document.getElementById('financeNewsMeta');
-  if (!list || !meta) return;
-
-  meta.textContent = `${label} · ${formatNewsTime(fetchedAt)}`;
-  list.innerHTML = items.slice(0, FINANCE_NEWS_LIMIT).map(item => `
-    <a class="news-item" href="${escapeAttr(item.link)}" target="_blank" rel="noopener noreferrer">
-      <div class="news-source">${escapeHtml(item.source || '财经')} · ${formatRelativeTime(item.timestamp || fetchedAt)}</div>
-      <div class="news-title">${escapeHtml(item.title)}</div>
-    </a>
-  `).join('');
-}
-
-function renderFinanceNewsEmpty(message) {
-  const list = document.getElementById('financeNewsList');
-  const meta = document.getElementById('financeNewsMeta');
-  if (!list || !meta) return;
-
-  meta.textContent = message;
-  list.innerHTML = `<div class="news-empty">${escapeHtml(message)}</div>`;
-}
-
-function formatNewsTime(timestamp) {
-  if (!timestamp) return '未更新';
-  return new Date(timestamp).toLocaleTimeString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-}
-
-function formatRelativeTime(timestamp) {
-  if (!timestamp) return '刚刚';
-  const diffMins = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
-  if (diffMins < 1) return '刚刚';
-  if (diffMins < 60) return `${diffMins} 分钟前`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours} 小时前`;
-  return `${Math.floor(diffHours / 24)} 天前`;
+async function openBookmarkInCurrentTab(url) {
+  if (!url) return;
+  await chrome.tabs.update({ url });
 }
 
 /**
@@ -542,13 +516,18 @@ function normalizeQuickLinkUrl(url) {
 }
 
 async function getQuickLinks() {
-  const { quickLinks = [], defaultQuickLinksSeeded = false } = await chrome.storage.local.get([
+  const {
+    quickLinks = [],
+    defaultQuickLinksSeeded = false,
+    defaultQuickLinksVersion = 0,
+  } = await chrome.storage.local.get([
     'quickLinks',
     'defaultQuickLinksSeeded',
+    'defaultQuickLinksVersion',
   ]);
   let links = Array.isArray(quickLinks) ? quickLinks : [];
 
-  if (!defaultQuickLinksSeeded) {
+  if (!defaultQuickLinksSeeded || defaultQuickLinksVersion < DEFAULT_QUICK_LINKS_VERSION) {
     const existingUrls = new Set(links.map(link => link.url));
     const defaultsToAdd = DEFAULT_QUICK_LINKS
       .filter(link => !existingUrls.has(link.url))
@@ -557,7 +536,11 @@ async function getQuickLinks() {
         ...link,
       }));
     links = [...links, ...defaultsToAdd];
-    await chrome.storage.local.set({ quickLinks: links, defaultQuickLinksSeeded: true });
+    await chrome.storage.local.set({
+      quickLinks: links,
+      defaultQuickLinksSeeded: true,
+      defaultQuickLinksVersion: DEFAULT_QUICK_LINKS_VERSION,
+    });
   }
 
   return links;
@@ -600,6 +583,37 @@ async function addQuickLink({ title, url }) {
   return { link: savedLink, updated: false };
 }
 
+async function updateQuickLink(id, { title, url }) {
+  const normalizedUrl = normalizeQuickLinkUrl(url);
+  if (!normalizedUrl) throw new Error('empty-url');
+
+  let parsed;
+  try {
+    parsed = new URL(normalizedUrl);
+  } catch {
+    throw new Error('invalid-url');
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('invalid-url');
+  }
+
+  const quickLinks = await getQuickLinks();
+  const existingIndex = quickLinks.findIndex(link => link.id === id);
+  if (existingIndex === -1) throw new Error('not-found');
+
+  const duplicateUrl = quickLinks.some(link => link.id !== id && link.url === normalizedUrl);
+  if (duplicateUrl) throw new Error('duplicate-url');
+
+  quickLinks[existingIndex] = {
+    ...quickLinks[existingIndex],
+    title: (title || '').trim() || parsed.hostname.replace(/^www\./, ''),
+    url: normalizedUrl,
+  };
+  await chrome.storage.local.set({ quickLinks });
+  return quickLinks[existingIndex];
+}
+
 function getChromeFaviconUrl(pageUrl, size = 32) {
   return `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(pageUrl)}&size=${size}`;
 }
@@ -607,6 +621,60 @@ function getChromeFaviconUrl(pageUrl, size = 32) {
 async function deleteQuickLink(id) {
   const quickLinks = await getQuickLinks();
   await chrome.storage.local.set({ quickLinks: quickLinks.filter(link => link.id !== id) });
+}
+
+async function saveQuickLinkOrder(orderedIds) {
+  const quickLinks = await getQuickLinks();
+  const linkById = new Map(quickLinks.map(link => [link.id, link]));
+  const orderedLinks = orderedIds.map(id => linkById.get(id)).filter(Boolean);
+  const remainingLinks = quickLinks.filter(link => !orderedIds.includes(link.id));
+  await chrome.storage.local.set({ quickLinks: [...orderedLinks, ...remainingLinks] });
+}
+
+function resetQuickLinkForm() {
+  editingQuickLinkId = null;
+  const form = document.getElementById('quickLinkForm');
+  const titleInput = document.getElementById('quickLinkTitle');
+  const urlInput = document.getElementById('quickLinkUrl');
+  const submitButton = form?.querySelector('button[type="submit"]');
+  form?.reset();
+  if (titleInput) titleInput.placeholder = '名称，例如 Gmail';
+  if (urlInput) urlInput.placeholder = '网址，例如 https://mail.google.com';
+  if (submitButton) submitButton.textContent = '添加';
+}
+
+function openQuickLinkFormForAdd() {
+  resetQuickLinkForm();
+  const form = document.getElementById('quickLinkForm');
+  if (!form) return;
+  form.style.display = 'flex';
+  document.getElementById('quickLinkTitle')?.focus();
+}
+
+function openQuickLinkFormForEdit(link) {
+  editingQuickLinkId = link.id;
+  const form = document.getElementById('quickLinkForm');
+  const titleInput = document.getElementById('quickLinkTitle');
+  const urlInput = document.getElementById('quickLinkUrl');
+  const submitButton = form?.querySelector('button[type="submit"]');
+  if (!form || !titleInput || !urlInput) return;
+
+  titleInput.value = link.title || '';
+  urlInput.value = link.url || '';
+  titleInput.placeholder = '修改名称';
+  urlInput.placeholder = '修改网址';
+  if (submitButton) submitButton.textContent = '保存';
+  form.style.display = 'flex';
+  titleInput.focus();
+  titleInput.select();
+}
+
+function highlightQuickLink(id) {
+  const item = document.querySelector(`.quick-link-item[data-quick-link-id="${CSS.escape(id)}"]`);
+  if (!item) return;
+  item.classList.remove('quick-link-saved');
+  requestAnimationFrame(() => item.classList.add('quick-link-saved'));
+  setTimeout(() => item.classList.remove('quick-link-saved'), 1400);
 }
 
 function formatFooterTime() {
@@ -842,9 +910,11 @@ function animateCardOut(card) {
  */
 function showToast(message) {
   const toast = document.getElementById('toast');
+  if (!toast) return;
   document.getElementById('toastText').textContent = message;
+  if (toastHideTimer) clearTimeout(toastHideTimer);
   toast.classList.add('visible');
-  setTimeout(() => toast.classList.remove('visible'), 2500);
+  toastHideTimer = setTimeout(() => toast.classList.remove('visible'), 2500);
 }
 
 function escapeAttr(value) {
@@ -878,7 +948,7 @@ async function renderQuickLinks() {
     const firstLetter = escapeHtml(displayTitle.charAt(0).toUpperCase() || '?');
 
     return `
-      <a class="quick-link-item" href="${safeUrl}" title="${safeTitle}">
+      <a class="quick-link-item" href="${safeUrl}" title="${safeTitle}" draggable="true" data-quick-link-id="${escapeAttr(link.id)}">
         <button class="quick-link-delete" type="button" data-action="delete-quick-link" data-quick-link-id="${escapeAttr(link.id)}" title="删除">×</button>
         <span class="quick-link-icon">
           ${faviconUrl ? `<img src="${faviconUrl}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">` : ''}
@@ -903,7 +973,7 @@ function renderQuickLink(link) {
 
   list.querySelector('.quick-link-add-card')?.remove();
   list.insertAdjacentHTML('beforeend', `
-    <a class="quick-link-item" href="${safeUrl}" title="${safeTitle}">
+    <a class="quick-link-item" href="${safeUrl}" title="${safeTitle}" draggable="true" data-quick-link-id="${escapeAttr(link.id)}">
       <button class="quick-link-delete" type="button" data-action="delete-quick-link" data-quick-link-id="${escapeAttr(link.id)}" title="删除">×</button>
       <span class="quick-link-icon">
         ${faviconUrl ? `<img src="${faviconUrl}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">` : ''}
@@ -919,6 +989,22 @@ function renderAddQuickLinkCard() {
       <span class="quick-link-icon quick-link-add-icon">+</span>
       <span class="quick-link-title">添加</span>
     </button>`;
+}
+
+function getQuickLinkDropTarget(list, x, y) {
+  const candidates = [...list.querySelectorAll('.quick-link-item[data-quick-link-id]:not(.dragging)')];
+  return candidates.reduce((closest, item) => {
+    const box = item.getBoundingClientRect();
+    const offset = Math.hypot(x - (box.left + box.width / 2), y - (box.top + box.height / 2));
+    return offset < closest.offset ? { offset, item } : closest;
+  }, { offset: Number.POSITIVE_INFINITY, item: null }).item;
+}
+
+async function persistCurrentQuickLinkOrder(list) {
+  const orderedIds = [...list.querySelectorAll('.quick-link-item[data-quick-link-id]')]
+    .map(item => item.dataset.quickLinkId)
+    .filter(Boolean);
+  await saveQuickLinkOrder(orderedIds);
 }
 
 /**
@@ -1502,7 +1588,7 @@ function renderArchiveItem(item) {
  */
 async function renderStaticDashboard() {
   await initTheme();
-  initFinanceNewsPanel();
+  await initBookmarkSidebar();
   await renderQuickLinks();
   startFooterClock();
   loadWuxiWeather();
@@ -1690,6 +1776,12 @@ function renderPausedNewtab() {
    ---------------------------------------------------------------- */
 
 document.addEventListener('click', async (e) => {
+  if (suppressQuickLinkClick && e.target.closest('.quick-link-item[data-quick-link-id]')) {
+    e.preventDefault();
+    suppressQuickLinkClick = false;
+    return;
+  }
+
   // Walk up the DOM to find the nearest element with data-action
   const actionEl = e.target.closest('[data-action]');
   if (!actionEl) return;
@@ -1701,23 +1793,19 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  if (action === 'refresh-finance-news') {
-    await loadFinanceNews({ force: true });
-    return;
-  }
-
-  if (action === 'hide-finance-news') {
-    await hideFinanceNewsPanel();
-    return;
-  }
-
-  if (action === 'show-finance-news') {
-    await showFinanceNewsPanel();
-    return;
-  }
-
   if (action === 'open-native-newtab') {
     chrome.tabs.create({ url: 'chrome://newtab' });
+    return;
+  }
+
+  if (action === 'open-bookmark') {
+    const url = actionEl.dataset.bookmarkUrl;
+    if (url) await openBookmarkInCurrentTab(url);
+    return;
+  }
+
+  if (action === 'open-bookmark-folder') {
+    openBookmarkFlyout(actionEl.dataset.bookmarkFolderId, actionEl);
     return;
   }
 
@@ -1730,8 +1818,12 @@ document.addEventListener('click', async (e) => {
   if (action === 'toggle-quick-link-form') {
     const form = document.getElementById('quickLinkForm');
     if (!form) return;
-    form.style.display = form.style.display === 'none' ? 'flex' : 'none';
-    if (form.style.display !== 'none') document.getElementById('quickLinkTitle')?.focus();
+    if (form.style.display === 'none') {
+      openQuickLinkFormForAdd();
+    } else {
+      form.style.display = 'none';
+      resetQuickLinkForm();
+    }
     return;
   }
 
@@ -1991,6 +2083,92 @@ document.addEventListener('click', async (e) => {
   }
 });
 
+document.addEventListener('dragstart', (e) => {
+  const item = e.target.closest('.quick-link-item[data-quick-link-id]');
+  if (!item || e.target.closest('.quick-link-delete')) return;
+
+  draggedQuickLinkId = item.dataset.quickLinkId;
+  suppressQuickLinkClick = false;
+  item.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', draggedQuickLinkId);
+});
+
+document.addEventListener('dragover', (e) => {
+  const list = e.target.closest('#quickLinkList');
+  if (!list || !draggedQuickLinkId) return;
+
+  e.preventDefault();
+  const draggedItem = list.querySelector(`.quick-link-item[data-quick-link-id="${CSS.escape(draggedQuickLinkId)}"]`);
+  const target = getQuickLinkDropTarget(list, e.clientX, e.clientY);
+  if (!draggedItem || !target || draggedItem === target) return;
+
+  const targetBox = target.getBoundingClientRect();
+  const insertAfter = e.clientY > targetBox.top + targetBox.height / 2 || e.clientX > targetBox.left + targetBox.width / 2;
+  list.insertBefore(draggedItem, insertAfter ? target.nextSibling : target);
+});
+
+document.addEventListener('drop', async (e) => {
+  const list = e.target.closest('#quickLinkList');
+  if (!list || !draggedQuickLinkId) return;
+
+  e.preventDefault();
+  suppressQuickLinkClick = true;
+  await persistCurrentQuickLinkOrder(list);
+});
+
+document.addEventListener('dragend', () => {
+  document.querySelector('.quick-link-item.dragging')?.classList.remove('dragging');
+  draggedQuickLinkId = null;
+});
+
+document.addEventListener('contextmenu', async (e) => {
+  const item = e.target.closest('.quick-link-item[data-quick-link-id]');
+  if (!item || e.target.closest('.quick-link-delete')) return;
+
+  e.preventDefault();
+  const quickLinks = await getQuickLinks();
+  const link = quickLinks.find(candidate => candidate.id === item.dataset.quickLinkId);
+  if (!link) return;
+  openQuickLinkFormForEdit(link);
+  showToast('正在编辑快捷网址，改完点保存');
+});
+
+document.getElementById('bookmarkList')?.addEventListener('mouseover', (e) => {
+  const folder = e.target.closest('.bookmark-folder[data-bookmark-folder-id]:not(.is-empty)');
+  if (!folder) return;
+  openBookmarkFlyout(folder.dataset.bookmarkFolderId, folder);
+});
+
+document.getElementById('bookmarkSidebar')?.addEventListener('mouseleave', scheduleCloseBookmarkFlyouts);
+
+document.getElementById('bookmarkSidebar')?.addEventListener('mouseenter', clearBookmarkFlyoutTimer);
+
+document.getElementById('bookmarkFlyoutLayer')?.addEventListener('mouseenter', clearBookmarkFlyoutTimer);
+
+document.getElementById('bookmarkFlyoutLayer')?.addEventListener('mouseleave', scheduleCloseBookmarkFlyouts);
+
+document.getElementById('bookmarkFlyoutLayer')?.addEventListener('mouseover', (e) => {
+  const folder = e.target.closest('.bookmark-folder[data-bookmark-folder-id]:not(.is-empty)');
+  if (!folder) return;
+  openBookmarkFlyout(folder.dataset.bookmarkFolderId, folder);
+});
+
+document.addEventListener('mouseover', (e) => {
+  const item = e.target.closest('.bookmark-link[data-bookmark-title]');
+  if (!item) return;
+  showBookmarkNameTooltip(item);
+});
+
+document.addEventListener('mouseout', (e) => {
+  if (!e.target.closest('.bookmark-link[data-bookmark-title]')) return;
+  hideBookmarkNameTooltip();
+});
+
+document.getElementById('bookmarkSearch')?.addEventListener('input', (e) => {
+  renderBookmarkList(bookmarkBarNode?.children || [], e.target.value || '');
+});
+
 document.getElementById('quickLinkForm')?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const titleInput = document.getElementById('quickLinkTitle');
@@ -2000,22 +2178,30 @@ document.getElementById('quickLinkForm')?.addEventListener('submit', async (e) =
   let result;
 
   try {
-    result = await addQuickLink({ title, url });
-  } catch {
-    showToast('网址格式不正确');
+    if (editingQuickLinkId) {
+      result = { link: await updateQuickLink(editingQuickLinkId, { title, url }), edited: true };
+    } else {
+      result = await addQuickLink({ title, url });
+    }
+  } catch (err) {
+    showToast(err?.message === 'duplicate-url' ? '这个网址已经存在' : '网址格式不正确');
     return;
   }
 
-  e.currentTarget.reset();
+  const savedId = result?.link?.id;
+  resetQuickLinkForm();
   e.currentTarget.style.display = 'none';
 
   try {
     await renderQuickLinks();
   } catch (err) {
     console.warn('[tab-out] Quick links render failed:', err);
+    showToast('已保存，刷新后可见');
+    return;
   }
 
-  showToast(result?.updated ? '已更新网址' : '已添加网址');
+  if (savedId) highlightQuickLink(savedId);
+  showToast(result?.edited ? '已保存修改' : result?.updated ? '已更新网址' : '已添加网址');
 });
 
 // ---- Archive toggle — expand/collapse the archive section ----

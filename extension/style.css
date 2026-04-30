@@ -23,6 +23,8 @@
   --page-glow: rgba(95, 99, 104, 0.22);
   --subtle-hover: rgba(232, 234, 237, 0.08);
   --shadow: rgba(0, 0, 0, 0.28);
+  --scrollbar-thumb: #5f6368;
+  --scrollbar-track: rgba(48, 49, 52, 0.42);
 }
 
 body[data-theme="light"] {
@@ -44,6 +46,8 @@ body[data-theme="light"] {
   --page-glow: rgba(96, 125, 161, 0.18);
   --subtle-hover: rgba(60, 64, 67, 0.10);
   --shadow: rgba(60, 64, 67, 0.14);
+  --scrollbar-thumb: #aeb6c2;
+  --scrollbar-track: rgba(223, 228, 236, 0.7);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -73,14 +77,14 @@ body::before {
   padding: 48px 32px 80px;
 }
 
-/* ---- Finance news side panel ---- */
-.news-panel {
+/* ---- Bookmark sidebar ---- */
+.bookmark-sidebar {
   position: fixed;
   left: 24px;
-  top: 140px;
+  top: 48px;
+  bottom: 48px;
   z-index: 4;
   width: 280px;
-  max-height: calc(100vh - 190px);
   overflow: hidden;
   border: 1px solid var(--warm-gray);
   border-radius: 16px;
@@ -90,7 +94,7 @@ body::before {
   animation: fadeUp 0.35s ease both;
 }
 
-.news-panel-header {
+.bookmark-sidebar-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -99,125 +103,215 @@ body::before {
   border-bottom: 1px solid var(--warm-gray);
 }
 
-.news-panel-header h2 {
+.bookmark-sidebar-header h2 {
   font-size: 14px;
   font-weight: 600;
   color: var(--ink);
   margin-bottom: 3px;
 }
 
-.news-panel-meta {
+.bookmark-sidebar-meta {
   font-size: 11px;
   color: var(--muted);
   line-height: 1.4;
 }
 
-.news-panel-actions {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.news-panel-actions button,
-.news-panel-opener {
+.bookmark-search {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 10px 12px 8px;
+  padding: 8px 10px;
   border: 1px solid var(--warm-gray);
   background: var(--control-bg);
-  color: var(--muted);
-  cursor: pointer;
+  color: var(--ink);
+  border-radius: 999px;
   font: inherit;
-  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
 }
 
-.news-panel-actions button {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+.bookmark-search:focus {
+  border-color: var(--accent-slate);
+}
+
+.bookmark-search::placeholder {
+  color: var(--muted);
+}
+
+.bookmark-list {
+  height: calc(100% - 104px);
+  overflow-y: scroll;
+  overflow-x: hidden;
+  padding: 2px 8px 12px;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+}
+
+.bookmark-list::-webkit-scrollbar,
+.bookmark-flyout::-webkit-scrollbar {
+  width: 8px;
+}
+
+.bookmark-list::-webkit-scrollbar-track,
+.bookmark-flyout::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--scrollbar-track) 72%, transparent);
+  border-radius: 999px;
+}
+
+.bookmark-list::-webkit-scrollbar-thumb,
+.bookmark-flyout::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--scrollbar-thumb) 76%, transparent);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.bookmark-list::-webkit-scrollbar-thumb:hover,
+.bookmark-flyout::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.bookmark-item {
+  width: 100%;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  cursor: default;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  padding: 7px 8px;
+  transition: background 0.12s, transform 0.08s;
+}
+
+.bookmark-item:hover,
+.bookmark-folder.is-open {
+  background: var(--subtle-hover);
+}
+
+.bookmark-item:active {
+  transform: scale(0.99);
+  background: color-mix(in srgb, var(--subtle-hover) 72%, var(--control-hover));
+}
+
+.bookmark-link {
+  cursor: pointer;
+}
+
+.bookmark-folder.is-empty {
+  color: var(--muted);
+}
+
+.bookmark-icon,
+.bookmark-folder-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bookmark-icon img {
+  width: 16px;
+  height: 16px;
+}
+
+.bookmark-fallback {
+  display: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--control-bg);
+  color: var(--accent-slate);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+
+.bookmark-folder-icon {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.bookmark-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmark-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 18px;
   line-height: 1;
 }
 
-.news-panel-actions button:hover,
-.news-panel-opener:hover {
-  background: var(--control-hover);
-  border-color: var(--control-border);
-  color: var(--ink);
-}
-
-.news-panel-opener {
-  position: fixed;
-  left: 24px;
-  bottom: 32px;
-  z-index: 4;
-  border-radius: 999px;
-  padding: 8px 14px;
+.bookmark-empty {
+  padding: 14px 10px;
   font-size: 12px;
-  box-shadow: 0 8px 24px var(--shadow);
-}
-
-.news-list {
-  max-height: calc(100vh - 252px);
-  overflow-y: auto;
-  padding: 4px 14px 10px;
-}
-
-.news-item {
-  display: block;
-  padding: 10px 0;
-  color: var(--ink);
-  text-decoration: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--warm-gray) 62%, transparent);
-}
-
-.news-item:last-child {
-  border-bottom: none;
-}
-
-.news-item:hover .news-title {
-  color: var(--accent-slate);
-}
-
-.news-source {
-  font-size: 10px;
   color: var(--muted);
-  margin-bottom: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.news-title {
-  position: relative;
-  padding-left: 12px;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--ink);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  transition: color 0.15s;
-}
-
-.news-title::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0.65em;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--accent-slate);
-  opacity: 0.78;
-}
-
-.news-empty {
-  padding: 18px 0;
-  color: var(--muted);
-  font-size: 12px;
   line-height: 1.6;
 }
 
-.news-panel.loading .news-list {
-  opacity: 0.65;
+.bookmark-flyout-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.bookmark-flyout {
+  position: fixed;
+  width: 260px;
+  max-height: min(560px, calc(100vh - 24px));
+  overflow-y: auto;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-width: thin;
+  pointer-events: auto;
+  padding: 6px;
+  border: 1px solid var(--warm-gray);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card-bg) 96%, transparent);
+  box-shadow: 0 14px 40px var(--shadow);
+  backdrop-filter: blur(14px);
+  animation: bookmarkFlyoutIn 0.12s ease both;
+}
+
+.bookmark-name-tooltip {
+  position: fixed;
+  z-index: 30;
+  display: none;
+  max-width: 360px;
+  padding: 7px 10px;
+  border: 1px solid var(--warm-gray);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card-bg) 98%, transparent);
+  color: var(--ink);
+  box-shadow: 0 10px 28px var(--shadow);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+@keyframes bookmarkFlyoutIn {
+  from { opacity: 0; transform: translateX(-4px) scale(0.98); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
 }
 
 /* When the saved-for-later sidebar is open, expand the container
@@ -323,11 +417,27 @@ header {
   flex-direction: column;
   align-items: center;
   gap: 9px;
-  transition: background 0.15s;
+  cursor: grab;
+  user-select: none;
+  transition: background 0.15s, opacity 0.15s, transform 0.15s;
 }
 
 .quick-link-item:hover {
   background: var(--subtle-hover);
+}
+
+.quick-link-item:active {
+  cursor: grabbing;
+}
+
+.quick-link-item.dragging {
+  opacity: 0.45;
+  transform: scale(0.96);
+}
+
+.quick-link-item.quick-link-saved {
+  background: rgba(138, 170, 146, 0.18);
+  box-shadow: 0 0 0 2px rgba(138, 170, 146, 0.32);
 }
 
 .quick-link-add-card {
@@ -902,7 +1012,7 @@ header {
   padding: 12px 24px;
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-  z-index: 100;
+  z-index: 9999;
   opacity: 0;
   transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
@@ -1337,18 +1447,16 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 }
 
 @media (max-width: 1200px) {
-  .news-panel {
-    top: 96px;
+  .bookmark-sidebar {
     left: 16px;
-    width: min(300px, calc(100vw - 32px));
-    max-height: calc(100vh - 150px);
+    width: 260px;
   }
-  .news-list {
-    max-height: calc(100vh - 212px);
-  }
-  .news-panel-opener {
-    left: 16px;
-    bottom: 24px;
+}
+
+@media (max-width: 900px) {
+  .bookmark-sidebar,
+  .bookmark-flyout-layer {
+    display: none;
   }
 }
 

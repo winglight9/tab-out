@@ -18,8 +18,8 @@
 - 将整体视觉改为接近 Chrome 原生新标签页的暗色风格。
 - 增加“黑暗模式”和明亮模式一键切换，默认使用黑暗模式。
 - 增加顶部快捷网址区域，支持添加、删除、自动获取网站图标。
-- 增加左侧可隐藏财经快讯栏，支持 15 分钟缓存、自动刷新、手动刷新和失败回退；V0.04 起改为后台请求新闻并增加 GDELT 兜底源，V0.05 起展示 12 条新闻并在标题前增加圆点。
-- 默认写入 Bilibili、V2EX、YouTube、微博、闲鱼 5 个快捷网址。
+- 增加左侧书签栏，读取 Chrome 本地书签栏，文件夹以浮窗展开，点击书签在当前新标签页打开。
+- 默认写入 GitHub、ChatGPT、Claude、Google、Gmail、X、LinkedIn、Bilibili、V2EX、YouTube、微博、闲鱼等常用快捷网址。
 - 快捷网址使用 `chrome.storage.local` 本地保存，不上传到外部服务。
 - 右下角显示当前时间和无锡天气。
 - 工具栏图标增加设置弹窗，可暂停 Tab Out 页面。
@@ -28,7 +28,7 @@
 ## 第三方与外部服务引用
 
 - 天气数据: [Open-Meteo Forecast API](https://open-meteo.com/)
-- 财经快讯: [Google News RSS](https://news.google.com/)、[FT 中文网 RSS](https://www.ftchinese.com/rss/news)、[36氪 RSS](https://36kr.com/feed)、[GDELT](https://www.gdeltproject.org/)
+- 书签数据: Chrome Bookmarks API，仅本地读取。
 - 网站图标: Chrome Manifest V3 `_favicon` 机制，需要 `favicon` 权限。
 - 浏览器 API: Chrome Extensions API，包括 `tabs`、`storage`、`favicon`、`chrome_url_overrides`。
 

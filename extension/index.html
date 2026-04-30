@@ -8,21 +8,17 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<aside class="news-panel" id="financeNewsPanel" aria-label="财经快讯" style="display:none">
-  <div class="news-panel-header">
+<aside class="bookmark-sidebar" id="bookmarkSidebar" aria-label="书签栏">
+  <div class="bookmark-sidebar-header">
     <div>
-      <h2>财经快讯</h2>
-      <div class="news-panel-meta" id="financeNewsMeta">正在加载...</div>
-    </div>
-    <div class="news-panel-actions">
-      <button type="button" data-action="refresh-finance-news" title="刷新财经新闻" aria-label="刷新财经新闻">↻</button>
-      <button type="button" data-action="hide-finance-news" title="隐藏财经新闻" aria-label="隐藏财经新闻">×</button>
+      <h2>书签栏</h2>
+      <div class="bookmark-sidebar-meta" id="bookmarkSidebarMeta">正在加载...</div>
     </div>
   </div>
-  <div class="news-list" id="financeNewsList"></div>
+  <input class="bookmark-search" id="bookmarkSearch" type="text" placeholder="搜索书签栏..." autocomplete="off">
+  <div class="bookmark-list" id="bookmarkList"></div>
 </aside>
-
-<button class="news-panel-opener" id="financeNewsOpener" type="button" data-action="show-finance-news" style="display:none">财经</button>
+<div class="bookmark-flyout-layer" id="bookmarkFlyoutLayer"></div>
 
 <div class="container">
 
