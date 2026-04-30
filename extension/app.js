@@ -26,6 +26,7 @@
 // All open tabs — populated by fetchOpenTabs()
 let openTabs = [];
 let footerClockTimer = null;
+let financeNewsAutoRefreshTimer = null;
 
 const DEFAULT_QUICK_LINKS = [
   { title: 'Bilibili', url: 'https://www.bilibili.com' },
@@ -36,7 +37,7 @@ const DEFAULT_QUICK_LINKS = [
 ];
 
 const FINANCE_NEWS_CACHE_TTL = 15 * 60 * 1000;
-const FINANCE_NEWS_LIMIT = 6;
+const FINANCE_NEWS_LIMIT = 12;
 const FINANCE_NEWS_SOURCES = [
   {
     name: 'Google News',
@@ -94,6 +95,7 @@ async function initFinanceNewsPanel() {
 
   if (shouldShow) {
     loadFinanceNews({ force: false });
+    startFinanceNewsAutoRefresh();
   }
 }
 
@@ -110,11 +112,29 @@ async function showFinanceNewsPanel() {
   await chrome.storage.local.set({ financeNewsVisible: true });
   setFinanceNewsVisibility(true);
   loadFinanceNews({ force: false });
+  startFinanceNewsAutoRefresh();
 }
 
 async function hideFinanceNewsPanel() {
   await chrome.storage.local.set({ financeNewsVisible: false });
+  stopFinanceNewsAutoRefresh();
   setFinanceNewsVisibility(false);
+}
+
+function startFinanceNewsAutoRefresh() {
+  stopFinanceNewsAutoRefresh();
+  financeNewsAutoRefreshTimer = setInterval(() => {
+    const panel = document.getElementById('financeNewsPanel');
+    if (!panel || panel.style.display === 'none') return;
+    loadFinanceNews({ force: true });
+  }, FINANCE_NEWS_CACHE_TTL);
+}
+
+function stopFinanceNewsAutoRefresh() {
+  if (financeNewsAutoRefreshTimer) {
+    clearInterval(financeNewsAutoRefreshTimer);
+    financeNewsAutoRefreshTimer = null;
+  }
 }
 
 async function loadFinanceNews({ force = false } = {}) {

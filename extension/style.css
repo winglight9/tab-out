@@ -185,6 +185,8 @@ body::before {
 }
 
 .news-title {
+  position: relative;
+  padding-left: 12px;
   font-size: 13px;
   line-height: 1.45;
   color: var(--ink);
@@ -193,6 +195,18 @@ body::before {
   -webkit-box-orient: vertical;
   overflow: hidden;
   transition: color 0.15s;
+}
+
+.news-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.65em;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent-slate);
+  opacity: 0.78;
 }
 
 .news-empty {

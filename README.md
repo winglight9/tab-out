@@ -2,7 +2,7 @@
 
 一个面向中文用户定制的 Chrome 新标签页扩展：暗色背景、快捷网址、标签页分组、稍后查看、财经快讯、无锡天气和本地时间。
 
-当前版本：`V0.04`
+当前版本：`V0.05`
 
 本项目基于 [zarazhangrui/tab-out](https://github.com/zarazhangrui/tab-out) 修改，原作者为 [Zara Zhang](https://x.com/zarazhangrui)，许可证为 MIT License。原作者信息和修改说明见 [`MODIFICATIONS.zh-CN.md`](./MODIFICATIONS.zh-CN.md)。
 
@@ -31,8 +31,8 @@ tab-out/extension/
 
 ### 方式二：下载打包版本
 
-1. 打开发布页：<https://github.com/winglight9/tab-out/releases/tag/V0.04>
-2. 下载 `tab-out-V0.04.zip`。
+1. 打开发布页：<https://github.com/winglight9/tab-out/releases/tag/V0.05>
+2. 下载 `tab-out-V0.05.zip`。
 3. 解压 zip 文件。
 4. 打开 Chrome，进入 `chrome://extensions`。
 5. 打开右上角“开发者模式”。
@@ -64,7 +64,7 @@ git clone https://github.com/winglight9/tab-out.git
 - `127.0.0.1` 和 `localhost` 会显示为“本地网页”。
 - 支持关闭单个标签页、关闭整组标签页、关闭重复标签页。
 - 支持把标签保存到“稍后查看”。
-- 左侧可隐藏财经快讯栏，支持 15 分钟缓存、手动刷新和失败回退。
+- 左侧可隐藏财经快讯栏，展示 12 条新闻，支持 15 分钟缓存、自动刷新、手动刷新和失败回退。
 - 右下角显示当前时间和无锡天气。
 - 点击工具栏 Tab Out 图标可打开设置弹窗，临时暂停 Tab Out 页面。
 
